@@ -175,8 +175,18 @@ def carregar_config():
             print(f"*** ERRO no config.json: {e}")
         print("*** Usando as configurações padrão. Corrija o arquivo e abra o programa de novo.\n")
         return
-    for aviso in aplicar_config(config):
+    avisos = aplicar_config(config)
+    for aviso in avisos:
         print(f"*** config.json: {aviso}")
+    # versão nova com opções novas: acrescenta só elas, com o valor padrão, sem mexer no resto.
+    # Com algum aviso não grava, para não apagar o que a pessoa ainda precisa corrigir.
+    novas = [chave for chave in OPCOES if chave not in {c.lower() for c in config}]
+    if novas and not avisos:
+        try:
+            salvar_config()
+            print(f"Opções novas no config.json (com o valor padrão): {', '.join(novas)}\n")
+        except OSError:
+            pass
 
 
 TIPOS = {bool: "true ou false", int: "um número inteiro (sem vírgula)", str: "um texto entre aspas", list: "uma lista entre [ ]"}

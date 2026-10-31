@@ -49,13 +49,19 @@ CONFIGURAÇÕES
 
 ARQUIVOS
   LeitorChat.exe                     o programa
-  config.json                        as configurações
   Guia de uso - Leitor de Chat.pdf   o guia completo
   tosu\tosu.exe                      lê os dados do osu! (github.com/tosuapp/tosu)
   LICENSE                            a licença do programa (MIT)
   licencas\                          as licenças do tosu e das bibliotecas usadas
 
   O programa também cria, nesta pasta:
+  config.json   as suas configurações
   registros\    planilhas de cada live (quem entrou e quantas mensagens mandou)
   apelidos.txt  apelidos que a voz usa
   pedidos.txt   fila de pedidos de mapas
+
+
+ATUALIZAR PARA UMA VERSÃO NOVA
+  Extraia o zip novo por cima desta pasta, substituindo os arquivos.
+  As suas configurações (config.json), apelidos, pedidos e registros
+  continuam: o zip não traz esses arquivos.

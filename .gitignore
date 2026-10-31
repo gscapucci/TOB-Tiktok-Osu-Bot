@@ -16,3 +16,6 @@ anotacoes.txt
 # tosu (baixe em github.com/tosuapp/tosu)
 tosu/
 *.log
+
+# Configurações de quem usa (o programa cria na primeira vez; os padrões ficam no leitor_chat.py)
+config.json

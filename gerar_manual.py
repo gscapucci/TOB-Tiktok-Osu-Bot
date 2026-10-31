@@ -9,7 +9,7 @@ import os
 import sys
 
 PASTA = os.path.dirname(os.path.abspath(__file__))
-CONFIG_JSON = os.path.join(PASTA, "config.json")
+PROGRAMA = os.path.join(PASTA, "leitor_chat.py")
 SAIDA = sys.argv[1] if len(sys.argv) > 1 else os.path.join(PASTA, "Guia de uso - Leitor de Chat.pdf")
 from reportlab.lib import colors
 from reportlab.lib.enums import TA_CENTER
@@ -192,9 +192,10 @@ s += [p("2. Primeira vez: preparando tudo", h1),
 s.append(passos([
     ("Extraia o zip", "Clique com o botão direito no <b>LeitorChat.zip</b> e escolha <b>Extrair tudo</b>. "
                       "Não abra o programa de dentro do zip, senão ele não consegue salvar arquivos."),
-    ("Confira os arquivos", "A pasta <b>LeitorChat</b> deve ter: <b>LeitorChat.exe</b>, <b>config.json</b>, "
+    ("Confira os arquivos", "A pasta <b>LeitorChat</b> deve ter: <b>LeitorChat.exe</b>, "
                             "<b>LEIA-ME.txt</b>, <b>LICENSE</b>, este guia e as pastas <b>tosu</b> e <b>licencas</b> "
-                            "(as licenças do tosu e das bibliotecas que o programa usa)."),
+                            "(as licenças do tosu e das bibliotecas que o programa usa). "
+                            "O <b>config.json</b> aparece sozinho na primeira vez que o programa abre."),
     ("Libere no Windows", "Na primeira vez que abrir o <b>LeitorChat.exe</b> e o <b>tosu.exe</b>, o Windows "
                           "pode mostrar “O Windows protegeu o computador”. Clique em <b>Mais informações</b> "
                           "e depois em <b>Executar assim mesmo</b>. O firewall também pode pedir permissão para o tosu: permita."),
@@ -444,8 +445,29 @@ s.append(tabela(["Função", "Durante a live", "No config.json"], [
 ], [45, 50, 75]))
 
 # ---------- 9 (config.json) ----------
+import ast as _ast
 import json as _json
-_cfg = _json.load(open(CONFIG_JSON, encoding="utf-8"))
+
+
+def padroes() -> dict:
+    """Os valores padrão, lidos do leitor_chat.py (o config.json é de quem usa, não serve de padrão)."""
+    arvore = _ast.parse(open(PROGRAMA, encoding="utf-8").read())
+    valores, ordem = {}, []
+    for no in arvore.body:
+        if isinstance(no, _ast.Assign) and isinstance(no.targets[0], _ast.Name):
+            nome = no.targets[0].id
+            if nome == "OPCOES":  # a ordem das opções, igual à do config.json que o programa grava
+                ordem = [c.value for c in _ast.walk(no.value) if isinstance(c, _ast.Constant)
+                         and isinstance(c.value, str) and c.value.isupper()]
+            else:
+                try:
+                    valores[nome] = _ast.literal_eval(no.value)
+                except ValueError:
+                    pass
+    return {nome.lower(): valores[nome] for nome in ordem}
+
+
+_cfg = padroes()
 codigo = ParagraphStyle("codigo", parent=corpo, fontName="Mono", fontSize=9, leading=12.5,
                         backColor=FUNDO, borderPadding=8, leftIndent=8, rightIndent=8, spaceBefore=4, spaceAfter=12)
 
@@ -471,7 +493,8 @@ PADRAO_TEXTO = {"tosu_url": "<i>o endereço padrão do tosu</i>"}
 
 s += [PageBreak(), p("9. O arquivo config.json", h1),
       p("O <b>config.json</b> guarda todas as configurações do app. Ele fica na mesma pasta do "
-        "LeitorChat.exe e é lido <b>toda vez que o programa abre</b>.", sub)]
+        "LeitorChat.exe e é lido <b>toda vez que o programa abre</b>. Ele não vem no zip: o programa "
+        "cria na primeira vez, e por isso uma versão nova extraída por cima não apaga as suas configurações.", sub)]
 s.append(p("Como mudar uma configuração", h2))
 s.append(passos([
     ("Feche o LeitorChat", "As mudanças só valem quando o programa abre."),

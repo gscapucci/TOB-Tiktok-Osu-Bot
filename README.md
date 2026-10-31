@@ -36,7 +36,7 @@ Ordem certa para a live:
 |---|---|
 | `LeitorChat.exe` | O programa pronto. Não precisa de Python. |
 | `iniciar.bat` | Abre o programa direto pelo `leitor_chat.py`. Na primeira vez, instala sozinho o Python, as bibliotecas e o tosu que faltarem. |
-| `config.json` | **Todas as configurações** (veja a [seção 2](#2-como-ligar-e-desligar-as-coisas)). |
+| `config.json` | **Todas as configurações** (veja a [seção 2](#2-como-ligar-e-desligar-as-coisas)). O programa cria na primeira vez que abre; não vem no zip nem no Git, por isso é só seu. |
 | `leitor_chat.py` | O código do programa. |
 | `tosu\tosu.exe` | O tosu, que lê os dados do osu! (do GitHub oficial `tosuapp/tosu`). Se não estiver na pasta, o `instalar.bat` baixa a versão mais recente; depois ele mesmo se atualiza. |
 | `README.md` | Este manual. |
@@ -119,7 +119,12 @@ as configurações padrão (não fecha no meio da live). Opções com nome escri
 errado ou com valor do tipo errado também são avisadas.
 
 Se você apagar o `config.json`, o programa cria um novo com os valores padrão.
-Pode também deixar só as opções que quer mudar — as que faltarem usam o padrão.
+Se faltar alguma opção (por exemplo, uma opção nova de uma versão mais nova do
+programa), ele acrescenta só ela, com o valor padrão, sem mexer nas outras.
+
+**Para atualizar o programa**, extraia o zip da versão nova por cima da pasta.
+O zip não traz o `config.json` (nem `apelidos.txt`, `pedidos.txt` e
+`registros\`), então as suas configurações continuam as mesmas.
 
 ### D) Desligar comandos específicos
 
