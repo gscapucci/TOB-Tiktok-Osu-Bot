@@ -25,20 +25,48 @@ COMO USAR EM CADA LIVE
   Clique em "Mais informações" e depois em "Executar assim mesmo".
 
 
-ALGUNS COMANDOS DO CHAT
-  !comandos   lista os comandos
-  !np         mapa que você está jogando
-  !pp         quanto PP o mapa vale com os mods atuais
-  !rank       seu rank no osu!
-  !pedir      o chat pede um mapa do osu!
-  !mudo       (você e mods) para de ler o chat; !voltar volta a ler
-  !volume 70  (você e mods) também: !voz, !velocidade, !bloquear,
-              !desligar <comando>, !avisos mapa... ficam gravados
-  !mod fulano (só você) torna alguém moderador
+COMANDOS DO CHAT
+  Todo mundo:
+  !comandos              fala a lista de comandos (atalhos: !ajuda, !cmd)
+  !mensagens             quantas mensagens a pessoa mandou nesta live (!msg)
+  !top                   as 3 pessoas que mais mandaram mensagem
+  !copiar <texto>        copia o texto para o seu Ctrl+C
+  !np                    mapa do osu! que você está jogando (!mapa)
+  !pp                    quanto PP o mapa vale com os mods atuais
+  !rank                  seu rank global, PP e precisão
+  !recorde               o recorde de PP desta live (!rec)
+  !pedir <link ou nome>  pede um mapa do osu!
+  !pedidos               quantos pedidos tem na fila e a posição da pessoa
 
-  Atalhos: !vol = !volume, !vel = !velocidade, !msg = !mensagens,
-  !rec = !recorde, !prox = !proximo, !fechar/!abrir = fechar/abrir pedidos...
-  A lista completa está no fim da seção 5 do guia em PDF.
+  Você e os moderadores:
+  !mudo                  para de ler o chat
+  !voltar                volta a ler o chat
+  !limpar                apaga as mensagens que esperavam para ser lidas
+  !apelido <usuário> <apelido>   a voz passa a chamar a pessoa pelo apelido (!ap)
+  !voz <nome>            troca a voz: francisca, thalita, antonio, raquel, duarte ou maria
+  !velocidade <-10 a 10> velocidade da voz (!vel)
+  !volume <0 a 100>      volume da voz (!vol)
+  !nomes                 liga/desliga o "Fulano disse:" antes das mensagens
+  !bloquear <palavra>    não lê mais mensagens com essa palavra (!bl)
+  !desbloquear <palavra> volta a ler mensagens com essa palavra (!dbl)
+  !desligar <comando>    desliga um comando (o nome vai sem o !)
+  !ligar <comando>       liga de novo um comando desligado
+  !avisos mapa           liga/desliga o aviso de mapa novo (!avisos recorde: o de recorde)
+  !espera <segundos>     tempo que cada pessoa espera entre um comando e outro
+  !tamanho <letras>      quantas letras de cada mensagem são lidas
+  !fila <número>         quantas mensagens podem esperar a voz
+  !proximo               abre o próximo pedido de mapa no navegador (!prox)
+  !fecharpedidos         para de aceitar pedidos (!fechar)
+  !abrirpedidos          volta a aceitar pedidos (!abrir)
+  !zerarpedidos          apaga a fila de pedidos (!zerar)
+  !limitepedidos <número>   quantos pedidos cabem na fila (!limite)
+
+  Só você:
+  !mod <usuário>         torna alguém moderador
+  !desmod <usuário>      tira alguém dos moderadores
+
+  O que os comandos de você e dos mods mudam fica gravado, menos !mudo,
+  !voltar, !limpar e os de pedidos, que valem até fechar o programa.
 
 
 CONFIGURAÇÕES
