@@ -173,8 +173,10 @@ ficam no arquivo `apelidos.txt`, um por linha:
 usuario_do_tiktok = Apelido
 ```
 
-Pode editar esse arquivo **durante a live** — vale na hora. As pessoas também
-podem escolher o próprio apelido com `!apelido`.
+Pode editar esse arquivo **durante a live** — vale na hora. Você e os
+moderadores também podem dar um apelido pelo chat: `!apelido fulano Aninha`.
+O público não pode escolher o próprio apelido, senão a voz falaria qualquer
+coisa que alguém quisesse.
 
 ---
 
@@ -182,12 +184,12 @@ podem escolher o próprio apelido com `!apelido`.
 
 Todo comando começa com **`!`** no início da mensagem. Maiúsculas não importam
 (`!NP` = `!np`). As respostas são **faladas pela voz** (o programa não escreve
-no chat do TikTok).
+no chat do TikTok). Vários comandos têm um [atalho](#atalhos) mais curto, como `!msg`
+para `!mensagens`.
 
 | Comando | O que a voz responde | Para desligar |
 |---|---|---|
 | `!comandos` (ou `!ajuda`) | Lista os comandos ligados | `"comandos"` em `comandos_desativados` |
-| `!apelido João` | "Beleza, agora vou te chamar de João." | `"apelido"` |
 | `!mensagens` | "Fulano, você mandou 12 mensagens nesta live." | `"mensagens"` |
 | `!top` | As 3 pessoas que mais mandaram mensagem | `"top"` |
 | `!copiar texto` | Copia o texto para o seu **Ctrl+C**. "Copiei a mensagem de Fulano." | `"copiar"` |
@@ -236,6 +238,7 @@ live e valem até fechar o programa.
 | `!mudo` | Para de ler o chat (e apaga o que estava esperando). Os avisos automáticos também param. | — |
 | `!voltar` | Volta a ler o chat | — |
 | `!limpar` | Apaga as mensagens que estavam esperando para serem lidas | — |
+| `!apelido fulano Aninha` | A voz passa a chamar o usuário `fulano` de Aninha. "Beleza, agora vou chamar fulano de Aninha." | `apelidos.txt` |
 | `!voz antonio` | Troca a voz: `francisca`, `thalita`, `antonio`, `raquel`, `duarte` ou `maria` (do Windows, sem internet). Sem nome, fala a lista. | `voz` |
 | `!velocidade 5` | Muda a velocidade da voz (-10 a 10) | `velocidade` |
 | `!volume 70` | Muda o volume (0 a 100) | `volume` |
@@ -267,6 +270,28 @@ Pelo chat **não** dá para mudar `prefixo`, `tosu_url`, `web_porta` e
 a conexão com o osu!. Essas ficam na página de configurações e no `config.json`.
 
 Todos esses comandos também podem ser desligados em `comandos_desativados`.
+
+### Atalhos
+
+Os comandos mais compridos também funcionam com um nome curto. O atalho faz
+exatamente o mesmo que o comando completo, e quem não pode usar o comando
+também não pode usar o atalho. Desligar um comando em `comandos_desativados`
+desliga os atalhos dele junto.
+
+| Atalho | É o mesmo que | Quem pode |
+|---|---|---|
+| `!ajuda`, `!cmd` | `!comandos` | Todo mundo |
+| `!mapa` | `!np` | Todo mundo |
+| `!rec` | `!recorde` | Todo mundo |
+| `!msg` | `!mensagens` | Todo mundo |
+| `!ap fulano Aninha` | `!apelido fulano Aninha` | Você e mods |
+| `!vel 5` | `!velocidade 5` | Você e mods |
+| `!vol 70` | `!volume 70` | Você e mods |
+| `!bl palavra` / `!dbl palavra` | `!bloquear` / `!desbloquear` | Você e mods |
+| `!prox` (ou `!próx`, `!próximo`) | `!proximo` | Você e mods |
+| `!fechar` / `!abrir` | `!fecharpedidos` / `!abrirpedidos` | Você e mods |
+| `!zerar` | `!zerarpedidos` | Você e mods |
+| `!limite 20` | `!limitepedidos 20` | Você e mods |
 
 ---
 

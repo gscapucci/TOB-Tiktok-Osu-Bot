@@ -6,8 +6,9 @@ Uso:
     (sem o @; a live precisa estar AO VIVO quando você rodar)
 
 Comandos do chat (as respostas são faladas):
-    Todo mundo:  !comandos  !apelido <nome>  !mensagens  !top  !copiar <texto>
+    Todo mundo:  !comandos  !mensagens  !top  !copiar <texto>
     Você e MODERADORES:  !mudo  !voltar  !limpar  !velocidade <-10 a 10>  !volume <0 a 100>
+                         !apelido <usuário> <apelido>
                          !voz <francisca, antonio, maria...>  !nomes  !bloquear <palavra>
                          !desbloquear <palavra>  !ligar <comando>  !desligar <comando>
                          !avisos <mapa ou recorde>  !espera <segundos>  !tamanho <letras>  !fila <mensagens>
@@ -454,13 +455,19 @@ def vigia_osu():
 pausado = False         # !mudo / !voltar
 ultimo_comando = {}     # unique_id -> horário do último comando (anti-spam)
 
-COMANDOS_PUBLICOS = ["np", "pp", "rank", "recorde", "pedir", "pedidos", "apelido", "mensagens",
-                     "top", "copiar"]
-COMANDOS_MOD = ["mudo", "voltar", "limpar", "velocidade", "volume", "voz", "nomes", "bloquear",
+COMANDOS_PUBLICOS = ["np", "pp", "rank", "recorde", "pedir", "pedidos", "mensagens", "top", "copiar"]
+COMANDOS_MOD = ["mudo", "voltar", "limpar", "apelido", "velocidade", "volume", "voz", "nomes", "bloquear",
                 "desbloquear", "ligar", "desligar", "avisos", "espera", "tamanho", "fila",
                 "proximo", "fecharpedidos", "abrirpedidos", "zerarpedidos", "limitepedidos"]
 COMANDOS_DONO = ["mod", "desmod"]  # só você: se um mod pudesse criar mods, qualquer um daria acesso a qualquer um
-APELIDOS_COMANDO = {"ajuda": "comandos", "mapa": "np", "próximo": "proximo"}
+# atalhos: !vol 70 é o mesmo que !volume 70. Desligar um comando desliga os atalhos dele também.
+APELIDOS_COMANDO = {
+    "ajuda": "comandos", "cmd": "comandos", "mapa": "np", "rec": "recorde", "msg": "mensagens",
+    "ap": "apelido",
+    "vel": "velocidade", "vol": "volume", "bl": "bloquear", "dbl": "desbloquear",
+    "próximo": "proximo", "prox": "proximo", "próx": "proximo",
+    "fechar": "fecharpedidos", "abrir": "abrirpedidos", "zerar": "zerarpedidos", "limite": "limitepedidos",
+}
 TODOS_COMANDOS = ["comandos"] + COMANDOS_PUBLICOS + COMANDOS_MOD + COMANDOS_DONO
 PROTEGIDOS = ("ligar", "desligar")  # se desligar estes pelo chat, não daria para religar pelo chat
 
@@ -510,6 +517,7 @@ def tratar_comando(user, nome: str, texto: str, dono: str) -> bool:
     if cmd in ("fechar", "abrir", "zerar", "limite") and arg.lower() == "pedidos" or \
             cmd == "limite" and arg.lower().startswith("pedidos "):
         cmd, arg = cmd + "pedidos", arg[len("pedidos"):].strip()  # aceita "!fechar pedidos" com espaço
+    cmd = APELIDOS_COMANDO.get(cmd, cmd)
     if desativado(cmd):
         return True  # comando desligado em COMANDOS_DESATIVADOS: ignora calado
     eh_dono = uid == dono.lower()
@@ -546,6 +554,19 @@ def tratar_comando(user, nome: str, texto: str, dono: str) -> bool:
         if cmd == "limpar":
             limpar_fila()
             print("[fila de fala limpa]")
+            return True
+        if cmd == "apelido":  # só mods: se o chat escolhesse o próprio apelido, a voz falaria qualquer coisa
+            partes = arg.split(maxsplit=1)
+            apelido = limpar(partes[1])[:30] if len(partes) > 1 else ""
+            if not apelido:
+                falar("Use: exclamação apelido, o usuário do TikTok sem arroba e o apelido.")
+                return True
+            alvo = partes[0].lstrip("@").lower()
+            if any(p.lower() in apelido.lower() for p in PALAVRAS_BLOQUEADAS):
+                falar("Esse apelido não pode.")
+                return True
+            salvar_apelido(alvo, apelido)
+            falar(f"Beleza, agora vou chamar {alvo} de {apelido}.")
             return True
         if cmd in NUMERICOS:
             chave, resposta = NUMERICOS[cmd]
@@ -612,7 +633,7 @@ def tratar_comando(user, nome: str, texto: str, dono: str) -> bool:
             ligado = globals()[OPCOES[qual]]
             falar(f"Aviso de {arg.lower()} {'ligado' if ligado else 'desligado'}.")
             return True
-        if cmd in ("proximo", "próximo"):
+        if cmd == "proximo":
             if not pedidos:
                 falar("Não tem nenhum pedido na fila.")
                 return True
@@ -632,12 +653,11 @@ def tratar_comando(user, nome: str, texto: str, dono: str) -> bool:
             falar("Fila de pedidos zerada.")
             return True
 
-    if cmd in COMANDOS_MOD or cmd in COMANDOS_DONO or cmd == "próximo":
+    if cmd in COMANDOS_MOD or cmd in COMANDOS_DONO:
         return True  # comando de moderação vindo de quem não pode: ignora calado
 
     # --- comandos de todo mundo ---
-    if cmd not in ("comandos", "ajuda", "apelido", "mensagens", "top", "copiar",
-                   "pedir", "pedidos", "np", "mapa", "pp", "rank", "recorde"):
+    if cmd != "comandos" and cmd not in COMANDOS_PUBLICOS:
         return False
     agora = time.time()
     if not eh_mod and agora - ultimo_comando.get(uid, 0) < ESPERA_COMANDO:
@@ -646,18 +666,9 @@ def tratar_comando(user, nome: str, texto: str, dono: str) -> bool:
     if pausado:
         return True
 
-    if cmd in ("comandos", "ajuda"):
+    if cmd == "comandos":
         falar(ajuda(COMANDOS_MOD + (COMANDOS_DONO if eh_dono else []), "Comandos de moderação") if eh_mod
               else ajuda(COMANDOS_PUBLICOS, "Comandos"))
-    elif cmd == "apelido":
-        apelido = limpar(arg)[:30]
-        if not apelido:
-            falar(f"{nome}, escreve o apelido depois do comando.")
-        elif any(p.lower() in apelido.lower() for p in PALAVRAS_BLOQUEADAS):
-            falar(f"{nome}, esse apelido não pode.")
-        else:
-            salvar_apelido(uid, apelido)
-            falar(f"Beleza, agora vou te chamar de {apelido}.")
     elif cmd == "mensagens":
         with trava:
             n = pessoas.get(user.unique_id, {}).get("mensagens", 0)
@@ -675,11 +686,11 @@ def tratar_comando(user, nome: str, texto: str, dono: str) -> bool:
             falar(f"O recorde da live é {numero(recorde['pp'])} PP em {recorde['mapa']}{com}.")
         else:
             falar("Ainda não tem recorde nesta live.")
-    elif cmd in ("np", "mapa", "pp", "rank"):
+    elif cmd in ("np", "pp", "rank"):
         d = osu
         if not d:
             falar("Não consegui ver o osu agora.")
-        elif cmd in ("np", "mapa"):
+        elif cmd == "np":
             falar("Agora: " + descrever_mapa(d) + ".")
             print(f"  https://osu.ppy.sh/b/{d['beatmap']['id']}")
         elif cmd == "pp":

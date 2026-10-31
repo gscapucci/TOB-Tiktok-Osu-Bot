@@ -177,7 +177,7 @@ s += [p("1. O que o app faz", h1),
         "falar sobre o mapa que você está jogando.", sub)]
 s.append(tabela(["Recurso", "O que faz"], [
     ["<b>Leitura do chat</b>", "Fala cada mensagem: “Fulano disse: ...”, com voz natural em português."],
-    ["<b>Comandos</b>", f"O chat pode usar {cmd('!np')}, {cmd('!pp')}, {cmd('!top')}, {cmd('!apelido')} e outros. As respostas são faladas."],
+    ["<b>Comandos</b>", f"O chat pode usar {cmd('!np')}, {cmd('!pp')}, {cmd('!top')}, {cmd('!mensagens')} e outros. As respostas são faladas."],
     ["<b>Moderação</b>", f"Você pode silenciar a voz, mudar volume e velocidade e bloquear palavras pelo próprio chat."],
     ["<b>Pedidos de mapas</b>", "O chat pede mapas do osu!, eles entram numa fila e você abre um por um."],
     ["<b>osu! ao vivo</b>", "Anuncia o mapa que você começou e o recorde de PP da live."],
@@ -248,10 +248,10 @@ s.append(atencao(f"No teste, {cmd('!apelido')} e {cmd('!pedir')} gravam de verda
 # ---------- 4 ----------
 s += [PageBreak(), p("4. Comandos para o chat", h1),
       p(f"Qualquer pessoa da live pode usar. Todo comando começa com {cmd('!')} no início da "
-        f"mensagem. Maiúsculas não importam: {cmd('!NP')} funciona igual a {cmd('!np')}.", sub)]
+        f"mensagem. Maiúsculas não importam: {cmd('!NP')} funciona igual a {cmd('!np')}. "
+        f"Vários comandos têm um atalho mais curto, como {cmd('!msg')} (veja o fim da seção 5).", sub)]
 s.append(tabela(["Comando", "O que faz"], [
     [cmd("!comandos"), f"Fala a lista de comandos. {cmd('!ajuda')} faz o mesmo."],
-    [cmd("!apelido João"), "A pessoa escolhe como a voz vai chamá-la."],
     [cmd("!mensagens"), "Quantas mensagens a pessoa mandou nesta live."],
     [cmd("!top"), "As 3 pessoas que mais mandaram mensagem."],
     [cmd("!copiar texto"), "Copia o texto para o seu Ctrl+C. É só dar Ctrl+V onde quiser."],
@@ -263,9 +263,7 @@ s.append(tabela(["Comando", "O que faz"], [
     [cmd("!pedidos"), "Quantos pedidos tem na fila e a posição da pessoa."],
 ], [38, 132]))
 s.append(Spacer(1, 8))
-s.append(p("Exemplos", h2))
-s.append(p(f"<b>Ana</b> escreve {cmd('!apelido Aninha')}"))
-s.append(fala("Beleza, agora vou te chamar de Aninha."))
+s.append(p("Exemplo", h2))
 s.append(p(f"<b>Lucas</b> escreve {cmd('!mensagens')}"))
 s.append(fala("Lucas, você mandou 12 mensagens nesta live."))
 s.append(atencao("Cada pessoa só pode usar <b>um comando a cada 15 segundos</b>. Os comandos a mais "
@@ -283,6 +281,8 @@ s.append(tabela(["Comando", "O que faz"], [
     [cmd("!mudo"), "Para de ler o chat. Os avisos automáticos do osu! também param."],
     [cmd("!voltar"), "Volta a ler o chat."],
     [cmd("!limpar"), "Apaga as mensagens que estavam esperando para serem lidas."],
+    [cmd("!apelido fulano Aninha"), "A voz passa a chamar o usuário fulano de Aninha. O público não pode "
+                                    "escolher o próprio apelido, senão a voz falaria qualquer coisa."],
     [cmd("!proximo"), "Abre o próximo pedido de mapa (seção 6)."],
     [cmd("!fecharpedidos"), "Para de aceitar pedidos."],
     [cmd("!abrirpedidos"), "Volta a aceitar pedidos."],
@@ -317,6 +317,24 @@ s.append(tabela(["Comando", "O que faz"], [
     [cmd("!mod usuario"), "Torna alguém moderador (usuário do TikTok, sem o @)."],
     [cmd("!desmod usuario"), "Tira alguém dos moderadores."],
 ], [42, 128]))
+s.append(p("Atalhos", h2))
+s.append(p("Os comandos mais compridos também funcionam com um nome curto. O atalho faz exatamente o "
+           "mesmo que o comando completo, e quem não pode usar o comando também não pode usar o atalho. "
+           "Desligar um comando desliga os atalhos dele junto."))
+s.append(tabela(["Atalho", "É o mesmo que", "Quem pode"], [
+    [f"{cmd('!ajuda')} {cmd('!cmd')}", cmd("!comandos"), "Todo mundo"],
+    [cmd("!mapa"), cmd("!np"), "Todo mundo"],
+    [cmd("!rec"), cmd("!recorde"), "Todo mundo"],
+    [cmd("!msg"), cmd("!mensagens"), "Todo mundo"],
+    [cmd("!ap fulano Aninha"), cmd("!apelido fulano Aninha"), "Você e mods"],
+    [cmd("!vel 5"), cmd("!velocidade 5"), "Você e mods"],
+    [cmd("!vol 70"), cmd("!volume 70"), "Você e mods"],
+    [f"{cmd('!bl')} {cmd('!dbl')}", f"{cmd('!bloquear')} {cmd('!desbloquear')}", "Você e mods"],
+    [f"{cmd('!prox')} {cmd('!próx')}", cmd("!proximo"), "Você e mods"],
+    [f"{cmd('!fechar')} {cmd('!abrir')}", f"{cmd('!fecharpedidos')} {cmd('!abrirpedidos')}", "Você e mods"],
+    [cmd("!zerar"), cmd("!zerarpedidos"), "Você e mods"],
+    [cmd("!limite 20"), cmd("!limitepedidos 20"), "Você e mods"],
+], [50, 80, 40]))
 s.append(Spacer(1, 4))
 s.append(p("Os moderadores não podem criar outros moderadores: assim, se um deles fizer besteira, não "
            "consegue dar acesso a mais ninguém. O prefixo, o endereço do tosu e as opções da página também "

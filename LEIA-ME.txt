@@ -36,6 +36,10 @@ ALGUNS COMANDOS DO CHAT
               !desligar <comando>, !avisos mapa... ficam gravados
   !mod fulano (só você) torna alguém moderador
 
+  Atalhos: !vol = !volume, !vel = !velocidade, !msg = !mensagens,
+  !rec = !recorde, !prox = !proximo, !fechar/!abrir = fechar/abrir pedidos...
+  A lista completa está no fim da seção 5 do guia em PDF.
+
 
 CONFIGURAÇÕES
   Com o programa aberto, entre em http://localhost:8765 no navegador.
