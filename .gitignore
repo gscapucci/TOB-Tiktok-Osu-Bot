@@ -2,7 +2,7 @@
 *.exe
 *.zip
 build/
-LeitorChat/
+dist/
 __pycache__/
 
 # Dados de cada live (têm usuários do TikTok de quem participou)
@@ -11,12 +11,8 @@ apelidos.txt
 pedidos.txt
 
 # Anotações pessoais
-bugs.txt
-ideias.txt
+anotacoes.txt
 
 # tosu (baixe em github.com/tosuapp/tosu)
 tosu/
 *.log
-
-# Gerada pelo gerar_licencas.py (vai no zip de distribuição)
-licencas/

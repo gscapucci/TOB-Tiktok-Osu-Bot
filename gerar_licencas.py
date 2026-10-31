@@ -1,5 +1,5 @@
 """
-Gera a pasta "licencas" com as licenças de tudo o que vai no zip de distribuição:
+Gera a pasta "dist\licencas" com as licenças de tudo o que vai no zip de distribuição:
 as bibliotecas empacotadas no LeitorChat.exe, o próprio Python e o tosu.
 
 Uso:
@@ -15,7 +15,7 @@ from importlib.metadata import PackageNotFoundError, distribution
 from packaging.requirements import Requirement
 
 PASTA = os.path.dirname(os.path.abspath(__file__))
-SAIDA = os.path.join(PASTA, "licencas")
+SAIDA = os.path.join(PASTA, "dist", "licencas")
 RAIZES = ["TikTokLive", "edge-tts", "comtypes"]  # o que o leitor_chat.py importa (veja requirements.txt)
 REPOSITORIO = "https://github.com/gscapucci/TOB-Tiktok-Osu-Bot"
 

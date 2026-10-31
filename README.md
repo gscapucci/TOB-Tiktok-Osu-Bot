@@ -46,9 +46,9 @@ Arquivos para quem for mexer no código:
 
 | Arquivo | Para que serve |
 |---|---|
-| `gerar_exe.bat` | Gera o `LeitorChat.exe` de novo a partir do `leitor_chat.py`. |
+| `gerar_exe.bat` | Gera o `LeitorChat.exe` de novo a partir do `leitor_chat.py`, na pasta `dist\`. |
 | `gerar_manual.bat` | Gera o guia em PDF de novo (usa o `gerar_manual.py`). |
-| `gerar_licencas.py` | Gera a pasta `licencas\` com as licenças de tudo o que vai no zip (bibliotecas do `.exe`, Python e tosu). |
+| `gerar_licencas.py` | Gera a pasta `dist\licencas\` com as licenças de tudo o que vai no zip (bibliotecas do `.exe`, Python e tosu). |
 | `LICENSE` | A licença do projeto (MIT). |
 | `instalar.bat` | Instala o que falta: o Python 3.13 (pelo winget), as bibliotecas do `requirements.txt` e o tosu (uns 50 MB). Os outros `.bat` já chamam ele sozinhos. Se o download do tosu falhar, o chat funciona do mesmo jeito, só os recursos de osu! ficam sem resposta. |
 | `requirements.txt` | Lista das bibliotecas Python e versões usadas. |
