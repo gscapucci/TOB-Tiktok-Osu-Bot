@@ -147,6 +147,7 @@ lido em voz alta) e some da lista falada pelo `!comandos`.
 Toda mensagem do chat é falada: **"Fulano disse: mensagem"**.
 
 Tratamentos automáticos:
+- Só são lidas as mensagens escritas depois que o programa abriu, e nenhuma é lida duas vezes (mesmo se a conexão cair e voltar)
 - Links viram a palavra **"link"**
 - Letras repetidas são encurtadas: "kkkkkkkk" → "kkk"
 - Mensagens longas são cortadas
@@ -191,7 +192,7 @@ para `!mensagens`.
 
 | Comando | O que a voz responde | Para desligar |
 |---|---|---|
-| `!comandos` (ou `!ajuda`) | Lista os comandos ligados | `"comandos"` em `comandos_desativados` |
+| `!comandos` (ou `!ajuda`) | Lista os comandos ligados (para você e os mods, os de moderação) | `"comandos"` em `comandos_desativados` |
 | `!mensagens` | "Fulano, você mandou 12 mensagens nesta live." | `"mensagens"` |
 | `!top` | As 3 pessoas que mais mandaram mensagem | `"top"` |
 | `!copiar texto` | Copia o texto para o seu **Ctrl+C**. "Copiei a mensagem de Fulano." | `"copiar"` |
@@ -237,7 +238,7 @@ live e valem até fechar o programa.
 
 | Comando | O que faz | Configuração que muda |
 |---|---|---|
-| `!mudo` | Para de ler o chat (e apaga o que estava esperando). Os avisos automáticos também param. | — |
+| `!mudo` | Para de ler o chat (e apaga o que estava esperando). Os avisos automáticos e as respostas dos comandos do público (`!np`, `!top`...) também param. | — |
 | `!voltar` | Volta a ler o chat | — |
 | `!limpar` | Apaga as mensagens que estavam esperando para serem lidas | — |
 | `!apelido fulano Aninha` | A voz passa a chamar o usuário `fulano` de Aninha. "Beleza, agora vou chamar fulano de Aninha." | `apelidos.txt` |
@@ -411,6 +412,8 @@ configurações. Os comandos de chat que mudam uma configuração gravam no
 | O Windows diz "O Windows protegeu o computador" | Clique em **Mais informações → Executar assim mesmo** (acontece porque o programa não tem assinatura digital). |
 | A voz não fala nada | A voz neural precisa de internet. Sem internet, use `"voz": "windows"`. Veja também se alguém usou `!mudo`. |
 | `!np`/`!pp`/`!rank` respondem "Não consegui ver o osu agora" | Veja se a janela do tosu está aberta (se não, abra o `tosu\tosu.exe`) e confira em http://127.0.0.1:24050 |
+| Aparece "tosu não encontrado na pasta tosu" | Falta o `tosu.exe` dentro da pasta `tosu`, ao lado do programa. Extraia o zip de novo (ou rode o `instalar.bat`). O chat funciona; só os comandos do osu! não respondem. |
+| Aparece "o relógio do computador está X minutos adiantado" (ou atrasado) | O programa já usa a hora da internet e funciona normal. Para acertar o Windows: Configurações → Hora e idioma → Data e hora → **Sincronizar agora**. |
 | Mudei o `config.json` e nada mudou | Feche e abra o programa de novo. Veja também se apareceu um aviso de erro no `config.json` ao abrir. |
 | A planilha não salvou | Feche o Excel e encerre o programa de novo. |
 | Quero testar sem estar ao vivo | Digite `teste` no lugar do usuário do TikTok. O que você digitar na janela entra como mensagem do chat (`Fulano: oi` manda como outra pessoa; `sair` fecha). |

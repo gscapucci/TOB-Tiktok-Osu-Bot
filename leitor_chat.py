@@ -1156,6 +1156,7 @@ def main():
     iniciar_pagina()
     abrir_tosu()
     acertar_inicio()
+    salvar_pedidos()  # a fila começa vazia: o pedidos.txt não pode continuar mostrando a da live anterior
     if len(sys.argv) > 1:
         usuario = sys.argv[1]
     else:

@@ -223,6 +223,8 @@ s.append(atencao("Se aparecer <b>UserOfflineError</b>, a live ainda não está a
 
 s.append(p("Como a voz lê o chat", h2))
 s += itens([
+    "Só são lidas as mensagens escritas <b>depois</b> que o programa abriu. As mais antigas do chat "
+    "ficam de fora, e nenhuma mensagem é lida duas vezes, mesmo se a conexão cair e voltar.",
     "Cada mensagem é falada como <b>“Fulano disse: mensagem”</b>.",
     "Links viram a palavra <b>“link”</b>.",
     "Letras repetidas são encurtadas: “kkkkkkkk” vira “kkk”.",
@@ -250,7 +252,8 @@ s += [PageBreak(), p("4. Comandos para o chat", h1),
         f"mensagem. Maiúsculas não importam: {cmd('!NP')} funciona igual a {cmd('!np')}. "
         f"Vários comandos têm um atalho mais curto, como {cmd('!msg')} (veja o fim da seção 5).", sub)]
 s.append(tabela(["Comando", "O que faz"], [
-    [cmd("!comandos"), f"Fala a lista de comandos. {cmd('!ajuda')} faz o mesmo."],
+    [cmd("!comandos"), f"Fala a lista de comandos. {cmd('!ajuda')} faz o mesmo. Para você e os "
+                       "moderadores, fala a lista dos comandos de moderação."],
     [cmd("!mensagens"), "Quantas mensagens a pessoa mandou nesta live."],
     [cmd("!top"), "As 3 pessoas que mais mandaram mensagem."],
     [cmd("!copiar texto"), "Copia o texto para o seu Ctrl+C. É só dar Ctrl+V onde quiser."],
@@ -277,7 +280,8 @@ s += [PageBreak(), p("5. Comandos de moderação", h1),
         "Se outra pessoa tentar, o comando é ignorado em silêncio.", sub)]
 s.append(p("Controlando a live", h2))
 s.append(tabela(["Comando", "O que faz"], [
-    [cmd("!mudo"), "Para de ler o chat. Os avisos automáticos do osu! também param."],
+    [cmd("!mudo"), "Para de ler o chat. Os avisos automáticos do osu! e as respostas dos comandos do "
+                   f"público (como {cmd('!np')} e {cmd('!top')}) também param."],
     [cmd("!voltar"), "Volta a ler o chat."],
     [cmd("!limpar"), "Apaga as mensagens que estavam esperando para serem lidas."],
     [cmd("!apelido fulano Aninha"), "A voz passa a chamar o usuário fulano de Aninha. O público não pode "
@@ -288,7 +292,8 @@ s.append(tabela(["Comando", "O que faz"], [
     [cmd("!zerarpedidos"), "Apaga a fila de pedidos inteira."],
 ], [42, 128]))
 s.append(Spacer(1, 4))
-s.append(p("Estes valem até fechar o programa."))
+s.append(p("Estes valem até fechar o programa, menos o apelido, que fica gravado no <b>apelidos.txt</b> "
+           "para as próximas lives (seção 10)."))
 s.append(p("Mudando as configurações", h2))
 s.append(p("Estes ficam <b>gravados no config.json</b>, como se você tivesse mudado pela página de "
            "configurações. Assim os moderadores conseguem ajustar tudo de qualquer lugar, só pelo chat."))
@@ -635,7 +640,8 @@ s.append(tabela(["Arquivo", "O que tem"], [
                                             "quantas mensagens mandou. Salva sozinha a cada 5 segundos."],
     ["<b>apelidos.txt</b>", "Os apelidos usados pela voz. Pode editar durante a live, vale na hora."],
     ["<b>pedidos.txt</b>", "A fila de pedidos de mapas, atualizada na hora."],
-    ["<b>config.json</b>", "As configurações (seção 9). Já vem no zip; se apagar, o programa cria de novo."],
+    ["<b>config.json</b>", "As configurações (seção 9). O programa cria na primeira vez que abre; "
+                           "se apagar, ele cria de novo com os valores padrão."],
 ], [55, 115]))
 s.append(Spacer(1, 8))
 s.append(p("Editando apelidos à mão", h2))
@@ -655,6 +661,11 @@ s.append(tabela(["Problema", "Solução"], [
     ["A voz não fala nada", f"Confira a internet e se alguém usou {cmd('!mudo')}. Sem internet, use \"voz\": \"windows\" no config.json."],
     [f"{cmd('!np')}, {cmd('!pp')} ou {cmd('!rank')} respondem “Não consegui ver o osu agora”",
      "Veja se a janela do tosu está aberta (se não, abra o <b>tosu\\tosu.exe</b>) e confira em http://127.0.0.1:24050."],
+    ["Aparece “tosu não encontrado na pasta tosu”", "Falta o <b>tosu.exe</b> dentro da pasta <b>tosu</b>, "
+     "ao lado do LeitorChat.exe. Extraia o zip de novo. O chat funciona; só os comandos do osu! não respondem."],
+    ["Aparece “o relógio do computador está X minutos adiantado” (ou atrasado)",
+     "O programa já usa a hora da internet e funciona normal. Para acertar o relógio do Windows: "
+     "Configurações → Hora e idioma → Data e hora → <b>Sincronizar agora</b>."],
     ["Mudei o config.json e nada mudou", "Feche e abra o programa de novo. Veja se apareceu algum aviso de erro do config.json ao abrir."],
     ["A página de configurações não abre", "O LeitorChat precisa estar aberto. Confira o endereço "
      "<b>http://localhost:8765</b> e se apareceu algum aviso sobre a página na janela do programa."],
