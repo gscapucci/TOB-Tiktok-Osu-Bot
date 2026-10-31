@@ -52,6 +52,8 @@ ARQUIVOS
   config.json                        as configurações
   Guia de uso - Leitor de Chat.pdf   o guia completo
   tosu\tosu.exe                      lê os dados do osu! (github.com/tosuapp/tosu)
+  LICENSE                            a licença do programa (MIT)
+  licencas\                          as licenças do tosu e das bibliotecas usadas
 
   O programa também cria, nesta pasta:
   registros\    planilhas de cada live (quem entrou e quantas mensagens mandou)

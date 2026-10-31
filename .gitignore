@@ -17,3 +17,6 @@ ideias.txt
 # tosu (baixe em github.com/tosuapp/tosu)
 tosu/
 *.log
+
+# Gerada pelo gerar_licencas.py (vai no zip de distribuição)
+licencas/

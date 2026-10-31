@@ -48,6 +48,8 @@ Arquivos para quem for mexer no código:
 |---|---|
 | `gerar_exe.bat` | Gera o `LeitorChat.exe` de novo a partir do `leitor_chat.py`. |
 | `gerar_manual.bat` | Gera o guia em PDF de novo (usa o `gerar_manual.py`). |
+| `gerar_licencas.py` | Gera a pasta `licencas\` com as licenças de tudo o que vai no zip (bibliotecas do `.exe`, Python e tosu). |
+| `LICENSE` | A licença do projeto (MIT). |
 | `instalar.bat` | Instala o que falta: o Python 3.13 (pelo winget), as bibliotecas do `requirements.txt` e o tosu (uns 50 MB). Os outros `.bat` já chamam ele sozinhos. Se o download do tosu falhar, o chat funciona do mesmo jeito, só os recursos de osu! ficam sem resposta. |
 | `requirements.txt` | Lista das bibliotecas Python e versões usadas. |
 
@@ -378,3 +380,17 @@ configurações. Os comandos de chat que mudam uma configuração gravam no
 | `!np`/`!pp`/`!rank` respondem "Não consegui ver o osu agora" | Abra o tosu e confira em http://127.0.0.1:24050 |
 | Mudei o `config.json` e nada mudou | Feche e abra o programa de novo. Veja também se apareceu um aviso de erro no `config.json` ao abrir. |
 | A planilha não salvou | Feche o Excel e encerre o programa de novo. |
+| Quero testar sem estar ao vivo | Digite `teste` no lugar do usuário do TikTok. O que você digitar na janela entra como mensagem do chat (`Fulano: oi` manda como outra pessoa; `sair` fecha). |
+
+---
+
+## Licença
+
+O Leitor de Chat é distribuído sob a licença [MIT](LICENSE).
+
+O zip de distribuição leva junto programas e bibliotecas de outros autores,
+cada um com a sua licença: o **tosu** (LGPL-3.0), o **TikTokLive** (AGPL-3.0
+com uma exceção que permite o uso em bots de live) e as bibliotecas
+empacotadas no `.exe` (em geral MIT, BSD e Apache). Os textos e os links
+para o código-fonte de cada um ficam na pasta `licencas\` do zip, gerada
+pelo `gerar_licencas.py`.

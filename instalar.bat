@@ -22,7 +22,7 @@ echo.
 
 :bibliotecas
 rem só confere se as bibliotecas existem, sem carregar (bem mais rápido que importar)
-"%PY%" -c "import importlib.util as u, sys; sys.exit(any(u.find_spec(m) is None for m in ['TikTokLive', 'edge_tts', 'comtypes', 'PyInstaller', 'reportlab']))" >nul 2>&1
+"%PY%" -c "import importlib.util as u, sys; sys.exit(any(u.find_spec(m) is None for m in ['TikTokLive', 'edge_tts', 'comtypes', 'PyInstaller', 'reportlab', 'packaging']))" >nul 2>&1
 if not errorlevel 1 goto tosu
 echo Instalando as bibliotecas necessárias. Só acontece na primeira vez...
 "%PY%" -m pip install --disable-pip-version-check -r requirements.txt
@@ -35,7 +35,7 @@ if exist "tosu\tosu.exe" exit /b 0
 echo Baixando o tosu (lê os dados do osu!). Só acontece na primeira vez, são uns 50 MB...
 rem pega a versão mais recente para Windows nas releases oficiais: github.com/tosuapp/tosu
 rem (o zip vai para dentro de tosu\ e não para o %TEMP%, que pode ter acento no nome do usuário)
-powershell -NoProfile -ExecutionPolicy Bypass -Command "$ErrorActionPreference = 'Stop'; $ProgressPreference = 'SilentlyContinue'; [Net.ServicePointManager]::SecurityProtocol = 'Tls12'; $r = Invoke-RestMethod 'https://api.github.com/repos/tosuapp/tosu/releases/latest' -Headers @{ 'User-Agent' = 'LeitorChat' }; $a = $r.assets | Where-Object { $_.name -like 'tosu-windows-*.zip' } | Select-Object -First 1; if (-not $a) { throw 'a release não tem o arquivo para Windows' }; New-Item -ItemType Directory -Force 'tosu' | Out-Null; $z = 'tosu\download.zip'; Invoke-WebRequest $a.browser_download_url -OutFile $z -UseBasicParsing; Expand-Archive -LiteralPath $z -DestinationPath 'tosu' -Force; Remove-Item -LiteralPath $z; Write-Host ('tosu ' + $r.tag_name + ' instalado.')"
+powershell -NoProfile -ExecutionPolicy Bypass -Command "$ErrorActionPreference = 'Stop'; $ProgressPreference = 'SilentlyContinue'; [Net.ServicePointManager]::SecurityProtocol = 'Tls12'; $r = Invoke-RestMethod 'https://api.github.com/repos/tosuapp/tosu/releases/latest' -Headers @{ 'User-Agent' = 'LeitorChat' }; $a = $r.assets | Where-Object { $_.name -like 'tosu-windows-*.zip' } | Select-Object -First 1; if (-not $a) { throw 'a release não tem o arquivo para Windows' }; New-Item -ItemType Directory -Force 'tosu' | Out-Null; $z = 'tosu\download.zip'; Invoke-WebRequest $a.browser_download_url -OutFile $z -UseBasicParsing; Expand-Archive -LiteralPath $z -DestinationPath 'tosu' -Force; Remove-Item -LiteralPath $z; Set-Content -LiteralPath 'tosu\VERSAO.txt' $r.tag_name; Write-Host ('tosu ' + $r.tag_name + ' instalado.')"
 if errorlevel 1 goto erro_tosu
 if not exist "tosu\tosu.exe" goto erro_tosu
 echo.

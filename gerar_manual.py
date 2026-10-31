@@ -193,7 +193,8 @@ s.append(passos([
     ("Extraia o zip", "Clique com o botão direito no <b>LeitorChat.zip</b> e escolha <b>Extrair tudo</b>. "
                       "Não abra o programa de dentro do zip, senão ele não consegue salvar arquivos."),
     ("Confira os arquivos", "A pasta <b>LeitorChat</b> deve ter: <b>LeitorChat.exe</b>, <b>config.json</b>, "
-                            "<b>LEIA-ME.txt</b>, este guia e a pasta <b>tosu</b>."),
+                            "<b>LEIA-ME.txt</b>, <b>LICENSE</b>, este guia e as pastas <b>tosu</b> e <b>licencas</b> "
+                            "(as licenças do tosu e das bibliotecas que o programa usa)."),
     ("Libere no Windows", "Na primeira vez que abrir o <b>LeitorChat.exe</b> e o <b>tosu.exe</b>, o Windows "
                           "pode mostrar “O Windows protegeu o computador”. Clique em <b>Mais informações</b> "
                           "e depois em <b>Executar assim mesmo</b>. O firewall também pode pedir permissão para o tosu: permita."),

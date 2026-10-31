@@ -8,3 +8,6 @@ pyinstaller==6.22.3
 
 # Para gerar o guia em PDF (gerar_manual.py)
 reportlab==5.1.0
+
+# Para gerar a pasta de licenças (gerar_licencas.py)
+packaging==26.3
