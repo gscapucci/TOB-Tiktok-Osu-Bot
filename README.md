@@ -317,6 +317,9 @@ O chat pede mapas, eles entram numa fila e você abre um de cada vez.
   manda o pedido numa mensagem sua para você mesmo, dentro do jogo. Clicando, pedido com link abre o
   mapa direto no jogo. A senha é a de **IRC** (osu.ppy.sh → Configurações → Legacy API), não a da conta,
   e a página de configurações nunca mostra ela. Se o envio falhar, o pedido abre no navegador.
+  O programa entra no chat do osu! uma vez só, no primeiro pedido, e fica conectado até fechar
+  (entrar a cada pedido seriam muitos logins seguidos, e o osu! pode deslogar o jogo). Se a conexão
+  cair, entra de novo sozinho no próximo pedido.
 - Sem isso, pedido com **link** abre a página do mapa no navegador; pedido com **nome** abre a busca do site do osu!.
 - No **lazer**: baixe o mapa no site (logado) e dê dois cliques no `.osz`.
 - Cada pessoa pode ter **um pedido por vez** na fila.

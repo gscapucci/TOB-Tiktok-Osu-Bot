@@ -30,6 +30,7 @@ Configurações: pelo config.json ou pela página http://localhost:8765 (WEB_POR
     que muda tudo na hora, sem reabrir o programa.
 """
 
+import atexit
 import csv
 import http.server
 import ipaddress
@@ -391,42 +392,112 @@ def link_do_pedido(texto: str) -> str:
     return "https://osu.ppy.sh/beatmapsets?q=" + urllib.parse.quote(texto)
 
 
-def mandar_no_osu(texto: str) -> str:
-    """Manda uma mensagem privada para você mesmo no chat do osu!, pelo IRC (irc.ppy.sh).
-    Devolve "" se deu certo, senão o motivo."""
+# Chat do osu! pelo IRC (irc.ppy.sh). Entra uma vez, no primeiro envio, e fica conectado até o programa
+# fechar: entrar e sair a cada pedido são muitos logins seguidos na sua conta, e o osu! pode te deslogar.
+irc = None              # a conexão aberta (None = desconectado)
+irc_nick = ""           # com que nome ela entrou
+irc_ultimo_envio = 0.0
+trava_irc = threading.Lock()  # um envio de cada vez
+
+
+def fechar_irc():
+    global irc
+    if irc is not None:
+        try:
+            irc.sendall(b"QUIT\r\n")
+            irc.close()
+        except OSError:
+            pass
+        irc = None
+
+
+def conectar_irc(nick: str) -> str:
+    """Entra no IRC do osu! (com a trava_irc já pega). Devolve "" se entrou, senão o motivo."""
+    global irc, irc_nick
     import socket
-    nick = OSU_USUARIO.strip().replace(" ", "_")  # no IRC do osu! os espaços do nome viram _
     try:
-        with socket.create_connection(("irc.ppy.sh", 6667), timeout=10) as s:
-            def enviar(linha):
-                s.sendall((linha + "\r\n").encode("utf-8"))
-            enviar(f"PASS {OSU_IRC_SENHA.strip()}")
-            enviar(f"NICK {nick}")
-            enviar(f"USER {nick} 0 * :{nick}")
-            resto, fim = b"", time.time() + 15
-            while time.time() < fim:
-                dados = s.recv(4096)
-                if not dados:
-                    return "o osu! fechou a conexão (nome ou senha de IRC errados?)"
-                resto += dados
-                *linhas, resto = resto.split(b"\r\n")
-                for linha in linhas:
-                    partes = linha.decode("utf-8", "replace").split()
-                    if partes[:1] == ["PING"]:
-                        enviar("PONG " + " ".join(partes[1:]))
-                    elif partes[1:2] == ["464"]:
-                        return "o osu! recusou a senha de IRC"
-                    elif partes[1:2] == ["001"]:  # entrou
-                        enviar(f"PRIVMSG {nick} :{texto}")
-                        time.sleep(1)  # sair na mesma hora às vezes perde a mensagem
-                        enviar("QUIT")
-                        return ""
-            return "o osu! demorou demais para responder"
+        s = socket.create_connection(("irc.ppy.sh", 6667), timeout=10)
     except OSError as e:
+        return f"não consegui conectar no chat do osu! ({e})"
+    try:
+        def enviar(linha):
+            s.sendall((linha + "\r\n").encode("utf-8"))
+        enviar(f"PASS {OSU_IRC_SENHA.strip()}")
+        enviar(f"NICK {nick}")
+        enviar(f"USER {nick} 0 * :{nick}")
+        resto, fim = b"", time.time() + 15
+        while time.time() < fim:
+            dados = s.recv(4096)
+            if not dados:
+                s.close()
+                return "o osu! fechou a conexão (nome ou senha de IRC errados?)"
+            resto += dados
+            *linhas, resto = resto.split(b"\r\n")
+            for linha in linhas:
+                partes = linha.decode("utf-8", "replace").split()
+                if partes[:1] == ["PING"]:
+                    enviar("PONG " + " ".join(partes[1:]))
+                elif partes[1:2] == ["464"]:
+                    s.close()
+                    return "o osu! recusou a senha de IRC"
+                elif partes[1:2] == ["001"]:  # entrou
+                    s.settimeout(None)
+                    irc, irc_nick = s, nick
+                    threading.Thread(target=ouvir_irc, args=(s,), daemon=True).start()
+                    print("[conectado ao chat do osu!]")
+                    return ""
+        s.close()
+        return "o osu! demorou demais para responder"
+    except OSError as e:
+        s.close()
         return f"não consegui conectar no chat do osu! ({e})"
 
 
-trava_irc = threading.Lock()  # um envio de cada vez: duas conexões juntas com o mesmo nome se atrapalham
+def ouvir_irc(s):
+    """Thread que responde aos PINGs do osu! (sem isso ele derruba a conexão) e percebe quando ela cai."""
+    global irc
+    resto = b""
+    try:
+        while True:
+            dados = s.recv(4096)
+            if not dados:
+                break
+            resto += dados
+            *linhas, resto = resto.split(b"\r\n")
+            for linha in linhas:
+                if linha.startswith(b"PING"):
+                    s.sendall(b"PONG" + linha[4:] + b"\r\n")
+    except OSError:
+        pass
+    with trava_irc:
+        if irc is not s:
+            return  # fechada de propósito (fechar_irc)
+        irc = None  # o próximo envio conecta de novo
+    print("[a conexão com o chat do osu! caiu; volta sozinha no próximo pedido]")
+
+
+def mandar_no_osu(texto: str) -> str:
+    """Manda uma mensagem privada para você mesmo no chat do osu!. Devolve "" se deu certo, senão o motivo."""
+    global irc_ultimo_envio
+    nick = OSU_USUARIO.strip().replace(" ", "_")  # no IRC do osu! os espaços do nome viram _
+    with trava_irc:
+        if irc is not None and irc_nick != nick:  # trocou o nome na página: entra de novo com o novo
+            fechar_irc()
+        for _ in range(2):  # se a conexão tinha caído sem avisar, entra de novo e tenta mais uma vez
+            if irc is None:
+                erro = conectar_irc(nick)
+                if erro:
+                    return erro
+            espera = irc_ultimo_envio + 1 - time.time()  # o osu! limita mensagens seguidas demais
+            if espera > 0:
+                time.sleep(espera)
+            try:
+                irc.sendall(f"PRIVMSG {nick} :{texto}\r\n".encode("utf-8"))
+                irc_ultimo_envio = time.time()
+                return ""
+            except OSError:
+                fechar_irc()
+        return "não consegui mandar no chat do osu!"
 
 
 def abrir_pedido(p: dict, navegador: bool = True):
@@ -436,8 +507,7 @@ def abrir_pedido(p: dict, navegador: bool = True):
         # no chat do osu!, [link texto] vira o texto clicável. Colchetes no texto quebrariam o link.
         rotulo = "abrir o mapa" if "osu.ppy.sh" in p["texto"] else p["texto"]
         limpo = lambda t: re.sub(r"[\[\]\r\n]", "", t)
-        with trava_irc:
-            erro = mandar_no_osu(f"Pedido de {limpo(p['nome'])}: [{p['url']} {limpo(rotulo)}]")
+        erro = mandar_no_osu(f"Pedido de {limpo(p['nome'])}: [{p['url']} {limpo(rotulo)}]")
         if not erro:
             print("  (mandado no seu chat do osu!)")
             return
@@ -1247,6 +1317,7 @@ def main():
     iniciar_pagina()
     abrir_tosu()
     acertar_inicio()
+    atexit.register(fechar_irc)  # sai do chat do osu! direitinho ao fechar
     salvar_pedidos()  # a fila começa vazia: o pedidos.txt não pode continuar mostrando a da live anterior
     if len(sys.argv) > 1:
         usuario = sys.argv[1]
