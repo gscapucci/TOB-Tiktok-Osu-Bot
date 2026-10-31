@@ -25,9 +25,11 @@ e se conecta ao osu! (via tosu) para falar sobre o mapa, o PP e o seu perfil.
 Ordem certa para a live:
 
 1. Abra o **osu!**
-2. Abra o **tosu** (`tosu\tosu.exe`, dentro da pasta do programa) — só necessário para os recursos de osu!
-3. **Comece a live** no TikTok
-4. Abra o **LeitorChat.exe** (ou o `iniciar.bat`) e digite seu usuário do TikTok, sem o @
+2. **Comece a live** no TikTok
+3. Abra o **LeitorChat.exe** (ou o `iniciar.bat`) e digite seu usuário do TikTok, sem o @
+
+O programa abre o **tosu** (`tosu\tosu.exe`) sozinho, numa janela separada, se ele ainda
+não estiver aberto. Fechar o programa não fecha o tosu.
 
 > A live precisa já estar **ao vivo** quando você abrir o programa.
 > Para fechar: **Ctrl+C** na janela, depois **Enter**.
@@ -324,8 +326,8 @@ O chat pede mapas, eles entram numa fila e você abre um de cada vez.
 
 ## 7. osu! ao vivo (tosu)
 
-Precisa do **tosu** aberto junto com o osu! (stable ou lazer). Se o tosu estiver
-fechado, o chat funciona normal e esses comandos respondem
+Precisa do **tosu** aberto junto com o osu! (stable ou lazer). O programa abre o
+`tosu\tosu.exe` sozinho quando começa; se mesmo assim o tosu estiver fechado, o chat funciona normal e esses comandos respondem
 "Não consegui ver o osu agora."
 
 > Para conferir se o tosu está funcionando: abra **http://127.0.0.1:24050** no navegador.
@@ -408,7 +410,7 @@ configurações. Os comandos de chat que mudam uma configuração gravam no
 | "Erro: ... UserOfflineError" | A live não está ao vivo, ou o usuário foi digitado errado. Comece a live antes de abrir o programa. |
 | O Windows diz "O Windows protegeu o computador" | Clique em **Mais informações → Executar assim mesmo** (acontece porque o programa não tem assinatura digital). |
 | A voz não fala nada | A voz neural precisa de internet. Sem internet, use `"voz": "windows"`. Veja também se alguém usou `!mudo`. |
-| `!np`/`!pp`/`!rank` respondem "Não consegui ver o osu agora" | Abra o tosu e confira em http://127.0.0.1:24050 |
+| `!np`/`!pp`/`!rank` respondem "Não consegui ver o osu agora" | Veja se a janela do tosu está aberta (se não, abra o `tosu\tosu.exe`) e confira em http://127.0.0.1:24050 |
 | Mudei o `config.json` e nada mudou | Feche e abra o programa de novo. Veja também se apareceu um aviso de erro no `config.json` ao abrir. |
 | A planilha não salvou | Feche o Excel e encerre o programa de novo. |
 | Quero testar sem estar ao vivo | Digite `teste` no lugar do usuário do TikTok. O que você digitar na janela entra como mensagem do chat (`Fulano: oi` manda como outra pessoa; `sair` fecha). |

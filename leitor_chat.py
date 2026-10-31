@@ -20,7 +20,7 @@ Pedidos de mapas do osu! (a fila fica salva em pedidos.txt):
     Você e MODERADORES:  !proximo (abre no navegador)  !fecharpedidos
                          !abrirpedidos  !zerarpedidos  !limitepedidos <número>
 
-osu! (precisa do tosu aberto):  !np (mapa atual)  !pp  !rank  !recorde
+osu! (o tosu abre sozinho, se estiver na pasta tosu):  !np (mapa atual)  !pp  !rank  !recorde
     e avisos automáticos de mapa novo (AVISAR_MAPA) e de recorde de PP da live (AVISAR_RECORDE)
 
 Sem live: rode com o usuário "teste" e digite as mensagens do chat na janela.
@@ -35,6 +35,7 @@ import ipaddress
 import os
 import queue
 import re
+import subprocess
 import sys
 import threading
 import time
@@ -398,6 +399,27 @@ osu = None              # últimos dados do tosu (None = tosu fechado)
 JOGANDO = 2             # número do estado "play" no tosu
 recorde = None          # melhor jogada da live: {"pp", "mapa", "mods"}
 INICIO = datetime.now(timezone.utc)  # scores de antes disto não contam para o recorde
+
+
+def abrir_tosu():
+    """Abre o tosu\\tosu.exe, se ele estiver na pasta e ainda não estiver aberto."""
+    exe = os.path.join(PASTA, "tosu", "tosu.exe")
+    if not os.path.exists(exe):
+        print("[tosu não encontrado na pasta tosu: os comandos do osu! não vão responder]")
+        return
+    try:
+        lista = subprocess.run(["tasklist", "/fi", "imagename eq tosu.exe", "/fo", "csv", "/nh"],
+                               capture_output=True, text=True, timeout=10).stdout
+    except (OSError, subprocess.SubprocessError):
+        lista = ""
+    if "tosu.exe" in lista.lower():
+        return  # já está aberto (por você ou por outra vez que o programa abriu)
+    try:
+        # janela própria: o Ctrl+C daqui não fecha o tosu, e o que ele escreve não se mistura com o chat
+        subprocess.Popen([exe], cwd=os.path.dirname(exe), creationflags=subprocess.CREATE_NEW_CONSOLE)
+        print("[tosu aberto]")
+    except OSError as e:
+        print(f"*** Não consegui abrir o tosu ({e}). Abra o tosu\\tosu.exe na mão.")
 
 
 def numero(n, casas=0) -> str:
@@ -1094,6 +1116,7 @@ def modo_teste():
 def main():
     carregar_config()
     iniciar_pagina()
+    abrir_tosu()
     if len(sys.argv) > 1:
         usuario = sys.argv[1]
     else:

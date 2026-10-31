@@ -196,7 +196,7 @@ s.append(passos([
                             "<b>LEIA-ME.txt</b>, <b>LICENSE</b>, este guia e as pastas <b>tosu</b> e <b>licencas</b> "
                             "(as licenças do tosu e das bibliotecas que o programa usa). "
                             "O <b>config.json</b> aparece sozinho na primeira vez que o programa abre."),
-    ("Libere no Windows", "Na primeira vez que abrir o <b>LeitorChat.exe</b> e o <b>tosu.exe</b>, o Windows "
+    ("Libere no Windows", "Na primeira vez que abrir o <b>LeitorChat.exe</b>, o Windows "
                           "pode mostrar “O Windows protegeu o computador”. Clique em <b>Mais informações</b> "
                           "e depois em <b>Executar assim mesmo</b>. O firewall também pode pedir permissão para o tosu: permita."),
     ("Tenha internet", "A voz e a conexão com o TikTok precisam de internet."),
@@ -209,10 +209,9 @@ s += [PageBreak(), p("3. Passo a passo de cada live", h1),
       p("Siga esta ordem sempre que for fazer live.", sub)]
 s.append(passos([
     ("Abra o osu!", "Pode ser o stable ou o lazer."),
-    ("Abra o tosu", "Dê dois cliques em <b>tosu\\tosu.exe</b>, dentro da pasta do programa. "
-                    "Ele lê os dados do osu! e precisa ficar aberto durante a live."),
     ("Comece a live no TikTok", "A live precisa estar <b>ao vivo</b> antes do próximo passo."),
-    ("Abra o LeitorChat.exe", "Digite o seu usuário do TikTok <b>sem o @</b> e aperte <b>Enter</b>."),
+    ("Abra o LeitorChat.exe", "Digite o seu usuário do TikTok <b>sem o @</b> e aperte <b>Enter</b>. "
+                              "Ele abre o <b>tosu</b> sozinho, numa janela separada: deixe ela aberta durante a live."),
     ("Pronto!", "A voz fala “Conectado ao chat da live.” e começa a ler as mensagens. "
                 "Para mudar as configurações durante a live, abra <b>http://localhost:8765</b> no navegador (seção 8)."),
 ]))
@@ -375,7 +374,8 @@ s += itens([
 
 # ---------- 7 ----------
 s += [PageBreak(), p("7. osu! ao vivo", h1),
-      p("Estes recursos precisam do <b>tosu</b> aberto junto com o osu!. Se o tosu estiver fechado, "
+      p("Estes recursos precisam do <b>tosu</b> aberto junto com o osu! (o programa abre ele sozinho). "
+        "Se o tosu estiver fechado, "
         "o chat funciona normal e estes comandos respondem “Não consegui ver o osu agora.”", sub)]
 s.append(p("Comandos", h2))
 s.append(p(f"{cmd('!np')} — mapa atual"))
@@ -654,7 +654,7 @@ s.append(tabela(["Problema", "Solução"], [
     ["“O Windows protegeu o computador”", "Clique em <b>Mais informações</b> e depois em <b>Executar assim mesmo</b>."],
     ["A voz não fala nada", f"Confira a internet e se alguém usou {cmd('!mudo')}. Sem internet, use \"voz\": \"windows\" no config.json."],
     [f"{cmd('!np')}, {cmd('!pp')} ou {cmd('!rank')} respondem “Não consegui ver o osu agora”",
-     "Abra o tosu e confira em http://127.0.0.1:24050."],
+     "Veja se a janela do tosu está aberta (se não, abra o <b>tosu\\tosu.exe</b>) e confira em http://127.0.0.1:24050."],
     ["Mudei o config.json e nada mudou", "Feche e abra o programa de novo. Veja se apareceu algum aviso de erro do config.json ao abrir."],
     ["A página de configurações não abre", "O LeitorChat precisa estar aberto. Confira o endereço "
      "<b>http://localhost:8765</b> e se apareceu algum aviso sobre a página na janela do programa."],

@@ -11,9 +11,9 @@ ANTES DE TUDO
 
 COMO USAR EM CADA LIVE
   1. Abra o osu!
-  2. Abra o tosu (pasta "tosu", arquivo tosu.exe)
-  3. Comece a live no TikTok
-  4. Abra o LeitorChat.exe e digite seu usuário do TikTok, sem o @
+  2. Comece a live no TikTok
+  3. Abra o LeitorChat.exe e digite seu usuário do TikTok, sem o @
+     (ele abre o tosu sozinho, numa janela separada, se ainda não estiver aberto)
 
   Para encerrar: Ctrl+C na janela do programa e depois Enter.
 
