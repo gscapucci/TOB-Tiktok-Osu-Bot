@@ -364,11 +364,27 @@ s += itens([
 s.append(fala("Pedido de Caio anotado, posição 3."))
 s.append(p("Como você abre os pedidos", h2))
 s.append(passos([
-    (f"Escreva {cmd('!proximo')} no chat", "O próximo pedido abre no navegador e a voz fala de quem é."),
-    ("Baixe o mapa", "Pedido com link abre a página do mapa. Pedido com nome abre a busca do site do osu!. "
-                     "Para baixar, você precisa estar logado no site."),
-    ("Importe no osu!", "No lazer, dê dois cliques no arquivo <b>.osz</b> baixado."),
+    (f"Escreva {cmd('!proximo')} no chat", "A voz fala de quem é o pedido. Se você configurou o chat do osu! "
+                                           "(veja abaixo), o pedido chega numa mensagem sua para você mesmo, "
+                                           "dentro do jogo. Se não, abre no navegador."),
+    ("Abra o mapa", "No chat do osu!, clique no pedido: pedido com link abre o mapa <b>direto no jogo</b>. "
+                    "Pedido com nome abre a busca do site do osu! no navegador."),
+    ("Baixe, se precisar", "Pelo navegador, você precisa estar logado no site. No lazer, dê dois cliques no "
+                           "arquivo <b>.osz</b> baixado."),
 ]))
+s.append(p("Mandando os pedidos para o chat do osu!", h2))
+s.append(passos([
+    ("Pegue a senha de IRC", "No site do osu!, clique no seu avatar, <b>Configurações</b>, e role até "
+                             "<b>Legacy API</b>, parte <b>IRC</b>. Ela <b>não é</b> a senha da sua conta."),
+    ("Coloque no config.json", "Com o programa fechado, preencha <b>osu_usuario</b> com o seu nome no osu! e "
+                               "<b>osu_irc_senha</b> com a senha de IRC (seção 9)."),
+    ("Pronto", f"O próximo {cmd('!proximo')} já chega no seu chat do osu!."),
+]))
+s.append(atencao("Não mostre a senha de IRC na live: com ela, qualquer um escreve no chat do osu! "
+                 "no seu nome. Por isso a página de configurações não mostra a senha. Se ela vazar, "
+                 "gere outra no site do osu!."))
+s.append(dica("Se a senha estiver errada ou o osu! não responder, a janela do programa avisa e o "
+              "pedido abre no navegador, como antes."))
 s.append(p("Regras da fila", h2))
 s += itens([
     "Cada pessoa pode ter <b>um pedido por vez</b> na fila.",
@@ -585,6 +601,10 @@ s.append(opcoes([
     ("avisar_recorde", "<b>true</b>: a voz anuncia quando você bate o recorde de PP da live."),
     ("tosu_url", "Endereço onde o app busca os dados do tosu: <b>http://127.0.0.1:24050/json/v2</b>. "
                  "Só mude se você trocou a porta nas configurações do tosu."),
+    ("osu_usuario", "Seu nome no osu!. Com ele e a senha de IRC, o !proximo manda o pedido no seu chat "
+                    "do osu! (seção 6)."),
+    ("osu_irc_senha", "A senha de IRC do osu! (Configurações, Legacy API, no site). <b>Não é</b> a senha "
+                      "da conta. Vazio: o !proximo abre no navegador."),
 ]))
 s.append(Spacer(1, 8))
 s.append(p("<b>Página de configurações</b> (estas duas só valem quando o programa abre de novo)", rotulo))

@@ -77,6 +77,10 @@ COMANDOS_DESATIVADOS = []  # comandos desligados, sem o "!". ex.: ["copiar", "to
 TOSU_URL = "http://127.0.0.1:24050/json/v2"
 AVISAR_MAPA = True      # falar "Agora: Artista - Música" quando você começa a jogar um mapa novo
 AVISAR_RECORDE = True   # falar quando você bate o recorde de PP da live
+# Chat do osu!: com os dois preenchidos, o !proximo manda o pedido no seu chat do osu! em vez de abrir o
+# navegador. A senha NÃO é a da conta: é a de IRC, em osu.ppy.sh > Configurações > Legacy API.
+OSU_USUARIO = ""        # seu nome no osu!
+OSU_IRC_SENHA = ""
 
 # Página de configurações (estas duas só valem quando o programa abre de novo)
 WEB_PORTA = 8765        # http://localhost:8765 ; 0 desliga a página
@@ -95,7 +99,8 @@ ARQUIVO_CONFIG = os.path.join(PASTA, "config.json")
 OPCOES = {nome.lower(): nome for nome in (
     "VOZ", "VELOCIDADE", "VOLUME", "LER_NOME", "TAMANHO_MAXIMO", "FILA_MAXIMA", "PALAVRAS_BLOQUEADAS",
     "PREFIXO", "MODERADORES", "ESPERA_COMANDO", "PEDIDOS_MAXIMOS", "COMANDOS_DESATIVADOS",
-    "TOSU_URL", "AVISAR_MAPA", "AVISAR_RECORDE", "WEB_PORTA", "WEB_REDE_LOCAL")}
+    "TOSU_URL", "AVISAR_MAPA", "AVISAR_RECORDE", "OSU_USUARIO", "OSU_IRC_SENHA", "WEB_PORTA", "WEB_REDE_LOCAL")}
+SECRETAS = ("osu_irc_senha",)  # ficam só no config.json: a página nunca mostra nem muda
 LIMITES = {"VELOCIDADE": (-10, 10), "VOLUME": (0, 100), "TAMANHO_MAXIMO": (1, None), "FILA_MAXIMA": (1, None),
            "ESPERA_COMANDO": (0, None), "PEDIDOS_MAXIMOS": (1, None), "WEB_PORTA": (0, 65535)}
 
@@ -382,6 +387,55 @@ def link_do_pedido(texto: str) -> str:
     if m:
         return "https://" + m.group(0)
     return "https://osu.ppy.sh/beatmapsets?q=" + urllib.parse.quote(texto)
+
+
+def mandar_no_osu(texto: str) -> str:
+    """Manda uma mensagem privada para você mesmo no chat do osu!, pelo IRC (irc.ppy.sh).
+    Devolve "" se deu certo, senão o motivo."""
+    import socket
+    nick = OSU_USUARIO.strip().replace(" ", "_")  # no IRC do osu! os espaços do nome viram _
+    try:
+        with socket.create_connection(("irc.ppy.sh", 6667), timeout=10) as s:
+            def enviar(linha):
+                s.sendall((linha + "\r\n").encode("utf-8"))
+            enviar(f"PASS {OSU_IRC_SENHA.strip()}")
+            enviar(f"NICK {nick}")
+            enviar(f"USER {nick} 0 * :{nick}")
+            resto, fim = b"", time.time() + 15
+            while time.time() < fim:
+                dados = s.recv(4096)
+                if not dados:
+                    return "o osu! fechou a conexão (nome ou senha de IRC errados?)"
+                resto += dados
+                *linhas, resto = resto.split(b"\r\n")
+                for linha in linhas:
+                    partes = linha.decode("utf-8", "replace").split()
+                    if partes[:1] == ["PING"]:
+                        enviar("PONG " + " ".join(partes[1:]))
+                    elif partes[1:2] == ["464"]:
+                        return "o osu! recusou a senha de IRC"
+                    elif partes[1:2] == ["001"]:  # entrou
+                        enviar(f"PRIVMSG {nick} :{texto}")
+                        time.sleep(1)  # sair na mesma hora às vezes perde a mensagem
+                        enviar("QUIT")
+                        return ""
+            return "o osu! demorou demais para responder"
+    except OSError as e:
+        return f"não consegui conectar no chat do osu! ({e})"
+
+
+def abrir_pedido(p: dict):
+    """!proximo: manda o pedido no seu chat do osu! (se configurado); senão, ou se der erro, abre no navegador."""
+    if OSU_USUARIO.strip() and OSU_IRC_SENHA.strip():
+        # no chat do osu!, [link texto] vira o texto clicável. Colchetes no texto quebrariam o link.
+        rotulo = "abrir o mapa" if "osu.ppy.sh" in p["texto"] else p["texto"]
+        limpo = lambda t: re.sub(r"[\[\]\r\n]", "", t)
+        erro = mandar_no_osu(f"Pedido de {limpo(p['nome'])}: [{p['url']} {limpo(rotulo)}]")
+        if not erro:
+            print("  (mandado no seu chat do osu!)")
+            return
+        print(f"*** {erro}. Abrindo no navegador.")
+    webbrowser.open(p["url"])
 
 
 def salvar_pedidos():
@@ -701,7 +755,7 @@ def tratar_comando(user, nome: str, texto: str, dono: str) -> bool:
                 return True
             p = pedidos.pop(0)
             salvar_pedidos()
-            webbrowser.open(p["url"])
+            threading.Thread(target=abrir_pedido, args=(p,), daemon=True).start()  # o IRC leva uns segundos
             print(f"[pedido de {p['nome']}: {p['texto']}]\n  {p['url']}")
             falar(f"Próximo pedido, de {p['nome']}. Faltam {len(pedidos)}.")
             return True
@@ -835,7 +889,8 @@ class PaginaConfig(http.server.BaseHTTPRequestHandler):
                        json.dumps(dados, ensure_ascii=False).encode("utf-8"))
 
     def dados_da_pagina(self) -> dict:
-        return {"config": config_atual(), "comandos": TODOS_COMANDOS,
+        config = {k: v for k, v in config_atual().items() if k not in SECRETAS}
+        return {"config": config, "comandos": TODOS_COMANDOS,
                 "apelidos": APELIDOS_COMANDO}
 
     def do_GET(self):
@@ -859,6 +914,7 @@ class PaginaConfig(http.server.BaseHTTPRequestHandler):
                 raise ValueError
         except (ValueError, UnicodeDecodeError):
             return self.responder_json({"erro": "dados inválidos"}, 400)
+        dados = {k: v for k, v in dados.items() if k.lower() not in SECRETAS}
         print("[configurações alteradas pela página]")
         avisos = mudar_config(dados)
         self.responder_json({"avisos": avisos, **self.dados_da_pagina()})
@@ -989,6 +1045,9 @@ button.principal { background: var(--destaque); border-color: var(--destaque); c
     <label class="check"><input type="checkbox" id="avisar_recorde"><span>Avisar recorde de PP da live</span></label>
     <label for="tosu_url">Endereço do tosu<small>Só mude se tiver mudado no tosu.</small></label>
     <input type="text" id="tosu_url">
+    <label for="osu_usuario">Seu nome no osu!<small>Com ele e a senha de IRC, o !proximo manda o pedido no seu chat do osu!.
+      A senha de IRC fica só no config.json (osu_irc_senha), por segurança esta página não mostra.</small></label>
+    <input type="text" id="osu_usuario">
   </section>
 
   <section>

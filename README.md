@@ -307,12 +307,16 @@ O chat pede mapas, eles entram numa fila e você abre um de cada vez.
 | `!pedir https://osu.ppy.sh/beatmapsets/...` | Todos | Pede pelo link |
 | `!pedir Freedom Dive` | Todos | Pede pelo nome (útil porque o TikTok costuma bloquear links) |
 | `!pedidos` | Todos | "Tem 5 pedidos na fila. O seu é o número 3." |
-| `!proximo` | Você/mods | Abre o próximo no navegador e fala de quem é |
+| `!proximo` | Você/mods | Manda o próximo no seu chat do osu! (ou abre no navegador) e fala de quem é |
 | `!fecharpedidos` / `!abrirpedidos` | Você/mods | Para / volta a aceitar pedidos (também aceita `!fechar pedidos`) |
 | `!zerarpedidos` | Você/mods | Apaga a fila inteira |
 | `!limitepedidos 20` | Você/mods | Muda o tamanho máximo da fila (fica gravado) |
 
-- Pedido com **link** abre a página do mapa; pedido com **nome** abre a busca do site do osu!.
+- **No chat do osu!:** com `osu_usuario` e `osu_irc_senha` preenchidos no `config.json`, o `!proximo`
+  manda o pedido numa mensagem sua para você mesmo, dentro do jogo. Clicando, pedido com link abre o
+  mapa direto no jogo. A senha é a de **IRC** (osu.ppy.sh → Configurações → Legacy API), não a da conta,
+  e a página de configurações nunca mostra ela. Se o envio falhar, o pedido abre no navegador.
+- Sem isso, pedido com **link** abre a página do mapa no navegador; pedido com **nome** abre a busca do site do osu!.
 - No **lazer**: baixe o mapa no site (logado) e dê dois cliques no `.osz`.
 - Cada pessoa pode ter **um pedido por vez** na fila.
 - A fila fica visível no arquivo **`pedidos.txt`**, atualizado na hora.
@@ -359,6 +363,8 @@ músicas, o próximo `!pp` já usa os novos.
 | Configuração | O que faz | Padrão |
 |---|---|---|
 | `tosu_url` | Endereço do tosu (só mude se mudou a porta no tosu) | `"http://127.0.0.1:24050/json/v2"` |
+| `osu_usuario` | Seu nome no osu! (para o `!proximo` mandar no chat do osu!) | `""` |
+| `osu_irc_senha` | Senha de IRC do osu! (não é a da conta). Vazio: `!proximo` abre no navegador | `""` |
 
 ---
 

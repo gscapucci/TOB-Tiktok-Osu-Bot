@@ -55,7 +55,7 @@ COMANDOS DO CHAT
   !espera <segundos>     tempo que cada pessoa espera entre um comando e outro
   !tamanho <letras>      quantas letras de cada mensagem são lidas
   !fila <número>         quantas mensagens podem esperar a voz
-  !proximo               abre o próximo pedido de mapa no navegador (!prox)
+  !proximo               manda o próximo pedido no seu chat do osu! ou abre no navegador (!prox)
   !fecharpedidos         para de aceitar pedidos (!fechar)
   !abrirpedidos          volta a aceitar pedidos (!abrir)
   !zerarpedidos          apaga a fila de pedidos (!zerar)
