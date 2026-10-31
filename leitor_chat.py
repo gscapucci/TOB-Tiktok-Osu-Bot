@@ -1,0 +1,1017 @@
+"""
+Leitor de chat da live do TikTok em voz alta (pt-BR).
+
+Uso:
+    python leitor_chat.py seu_usuario
+    (sem o @; a live precisa estar AO VIVO quando você rodar)
+
+Comandos do chat (as respostas são faladas):
+    Todo mundo:  !comandos  !apelido <nome>  !mensagens  !top  !copiar <texto>
+    Você e MODERADORES:  !mudo  !voltar  !limpar  !velocidade <-10 a 10>
+                         !volume <0 a 100>  !nomes  !bloquear <palavra>
+
+Pedidos de mapas do osu! (a fila fica salva em pedidos.txt):
+    Todo mundo:  !pedir <link ou nome do mapa>  !pedidos
+    Você e MODERADORES:  !proximo (abre no navegador)  !fecharpedidos
+                         !abrirpedidos  !zerarpedidos
+
+osu! (precisa do tosu aberto):  !np (mapa atual)  !pp  !rank  !recorde
+    e avisos automáticos de mapa novo (AVISAR_MAPA) e de recorde de PP da live (AVISAR_RECORDE)
+
+Sem live: rode com o usuário "teste" e digite as mensagens do chat na janela.
+
+Configurações: pelo config.json ou pela página http://localhost:8765 (WEB_PORTA),
+    que muda tudo na hora, sem reabrir o programa.
+"""
+
+import csv
+import http.server
+import ipaddress
+import os
+import queue
+import re
+import sys
+import threading
+import time
+import json
+import urllib.parse
+import urllib.request
+import webbrowser
+from datetime import datetime
+
+from TikTokLive import TikTokLiveClient
+from TikTokLive.events import CommentEvent, ConnectEvent, DisconnectEvent, JoinEvent
+
+# ---------------- Configurações ----------------
+# Estes são os valores padrão. Para mudar, use a página de configurações ou edite o
+# config.json ao lado do programa (ele é criado sozinho na primeira vez que o programa abre).
+# Vozes disponíveis (as neurais precisam de internet e soam mais naturais):
+#   "pt-BR-FranciscaNeural"           feminina
+#   "pt-BR-ThalitaMultilingualNeural" feminina
+#   "pt-BR-AntonioNeural"             masculina
+#   "pt-PT-RaquelNeural"              feminina (Portugal)
+#   "pt-PT-DuarteNeural"              masculina (Portugal)
+#   "windows"                         voz Maria do Windows (funciona offline)
+VOZ = "pt-BR-FranciscaNeural"
+VELOCIDADE = 1          # -10 (lento) a 10 (rápido)
+VOLUME = 100            # 0 a 100
+LER_NOME = True         # falar "Fulano disse: ..." antes da mensagem
+TAMANHO_MAXIMO = 200    # corta mensagens muito longas
+FILA_MAXIMA = 15        # se o chat estiver muito rápido, descarta as mais antigas
+PALAVRAS_BLOQUEADAS = []  # ex.: ["spam", "palavrão"]
+
+# Comandos do chat (veja a lista completa em tratar_comando)
+PREFIXO = "!"
+MODERADORES = []        # usuários (sem @) que podem usar os comandos de moderação, além de você
+ESPERA_COMANDO = 15     # segundos que cada pessoa espera entre um comando e outro
+PEDIDOS_MAXIMOS = 30    # tamanho máximo da fila de pedidos de mapas do osu!
+COMANDOS_DESATIVADOS = []  # comandos desligados, sem o "!". ex.: ["copiar", "top"]
+
+# osu! (precisa do tosu aberto junto com o jogo)
+TOSU_URL = "http://127.0.0.1:24050/json/v2"
+AVISAR_MAPA = True      # falar "Agora: Artista - Música" quando você começa a jogar um mapa novo
+AVISAR_RECORDE = True   # falar quando você bate o recorde de PP da live
+
+# Página de configurações (estas duas só valem quando o programa abre de novo)
+WEB_PORTA = 8765        # http://localhost:8765 ; 0 desliga a página
+WEB_REDE_LOCAL = False  # True: abre também no celular/outro PC da mesma rede (qualquer um nela pode mexer)
+# ------------------------------------------------
+
+fila: "queue.Queue[str]" = queue.Queue()
+
+# ---------------- Registro de quem entrou / mensagens ----------------
+# Pasta do programa: ao lado do .exe quando empacotado, senão ao lado deste arquivo
+PASTA = os.path.dirname(sys.executable if getattr(sys, "frozen", False) else os.path.abspath(__file__))
+PASTA_REGISTROS = os.path.join(PASTA, "registros")
+ARQUIVO_CONFIG = os.path.join(PASTA, "config.json")
+
+# nome no config.json -> variável aqui do programa
+OPCOES = {nome.lower(): nome for nome in (
+    "VOZ", "VELOCIDADE", "VOLUME", "LER_NOME", "TAMANHO_MAXIMO", "FILA_MAXIMA", "PALAVRAS_BLOQUEADAS",
+    "PREFIXO", "MODERADORES", "ESPERA_COMANDO", "PEDIDOS_MAXIMOS", "COMANDOS_DESATIVADOS",
+    "TOSU_URL", "AVISAR_MAPA", "AVISAR_RECORDE", "WEB_PORTA", "WEB_REDE_LOCAL")}
+LIMITES = {"VELOCIDADE": (-10, 10), "VOLUME": (0, 100), "TAMANHO_MAXIMO": (1, None), "FILA_MAXIMA": (1, None),
+           "ESPERA_COMANDO": (0, None), "PEDIDOS_MAXIMOS": (1, None), "WEB_PORTA": (0, 65535)}
+
+
+def config_atual() -> dict:
+    return {chave: globals()[nome] for chave, nome in OPCOES.items()}
+
+
+def salvar_config():
+    with open(ARQUIVO_CONFIG, "w", encoding="utf-8") as f:
+        json.dump(config_atual(), f, ensure_ascii=False, indent=2)
+
+
+def aplicar_config(config: dict) -> list:
+    """Confere e aplica as opções (do config.json ou da página). Devolve os avisos do que não deu."""
+    avisos = []
+    for chave, valor in config.items():
+        nome = OPCOES.get(chave.lower())
+        if nome is None:
+            avisos.append(f"não conheço a opção \"{chave}\" (escrita errada?). Ignorando.")
+            continue
+        atual = globals()[nome]
+        esperado = type(atual)
+        # em Python True/False também contam como número; aqui não podem
+        ok = isinstance(valor, esperado) and not (esperado is int and isinstance(valor, bool))
+        if ok and esperado is list:
+            ok = all(isinstance(x, str) for x in valor)
+        if not ok:
+            avisos.append(f"\"{chave}\" deveria ser {TIPOS.get(esperado, esperado.__name__)}. "
+                          f"Mantive: {json.dumps(atual, ensure_ascii=False)}")
+            continue
+        if nome == "PREFIXO" and not valor.strip():
+            avisos.append(f"\"{chave}\" não pode ficar vazio. Mantive: {json.dumps(atual, ensure_ascii=False)}")
+            continue
+        if nome in LIMITES:
+            menor, maior = LIMITES[nome]
+            ajustado = max(menor, valor) if maior is None else max(menor, min(maior, valor))
+            if ajustado != valor:
+                avisos.append(f"\"{chave}\" vai de {menor} a {maior if maior is not None else 'quanto quiser'}. "
+                              f"Usei {ajustado}.")
+                valor = ajustado
+        globals()[nome] = valor
+    return avisos
+
+
+def carregar_config():
+    """Lê o config.json (criando com os valores padrão se não existir)."""
+    if not os.path.exists(ARQUIVO_CONFIG):
+        salvar_config()
+        print(f"Criei o arquivo de configurações: {ARQUIVO_CONFIG}\n")
+        return
+    try:
+        with open(ARQUIVO_CONFIG, encoding="utf-8-sig") as f:
+            config = json.load(f)
+        if not isinstance(config, dict):
+            raise ValueError("o arquivo precisa começar com { e terminar com }")
+    except (ValueError, UnicodeDecodeError) as e:
+        if isinstance(e, json.JSONDecodeError):
+            print(f"*** ERRO no config.json, perto da linha {e.lineno}, coluna {e.colno}.\n"
+                  f"*** Confira: true/false em minúsculo, textos entre aspas, vírgula entre os itens\n"
+                  f"*** e nenhuma vírgula depois do último item.")
+        else:
+            print(f"*** ERRO no config.json: {e}")
+        print("*** Usando as configurações padrão. Corrija o arquivo e abra o programa de novo.\n")
+        return
+    for aviso in aplicar_config(config):
+        print(f"*** config.json: {aviso}")
+
+
+TIPOS = {bool: "true ou false", int: "um número inteiro (sem vírgula)", str: "um texto entre aspas", list: "uma lista entre [ ]"}
+pessoas = {}  # unique_id -> {"nome", "entrou", "mensagens"}
+trava = threading.Lock()
+mudou = False
+
+
+def registrar(user, mensagem=False):
+    global mudou
+    if user is None or not user.unique_id:
+        return
+    with trava:
+        p = pessoas.setdefault(user.unique_id, {
+            "nome": user.nick_name or user.unique_id,
+            "entrou": datetime.now().strftime("%H:%M:%S"),
+            "mensagens": 0,
+        })
+        if mensagem:
+            p["mensagens"] += 1
+        mudou = True
+
+
+def salvar(arquivo):
+    """Salva a planilha (abre no Excel), ordenada por quem mais mandou mensagem."""
+    global mudou
+    with trava:
+        if not mudou:
+            return
+        linhas = sorted(pessoas.items(), key=lambda kv: -kv[1]["mensagens"])
+        mudou = False
+    with open(arquivo, "w", newline="", encoding="utf-8-sig") as f:
+        w = csv.writer(f, delimiter=";")
+        w.writerow(["Usuário", "Nome", "Entrou às", "Mensagens"])
+        for uid, p in linhas:
+            w.writerow([f"@{uid}", p["nome"], p["entrou"], p["mensagens"]])
+
+
+def salvador_automatico(arquivo):
+    while True:
+        time.sleep(5)
+        try:
+            salvar(arquivo)
+        except PermissionError:
+            pass  # arquivo aberto no Excel; tenta de novo depois
+
+
+def tocar_mp3(caminho: str):
+    """Toca um mp3 usando o player nativo do Windows (MCI) e espera terminar."""
+    import ctypes
+    mci = ctypes.windll.winmm.mciSendStringW
+    mci(f'open "{caminho}" type mpegvideo alias fala', None, 0, None)
+    mci(f"setaudio fala volume to {VOLUME * 10}", None, 0, None)
+    mci("play fala wait", None, 0, None)
+    mci("close fala", None, 0, None)
+
+
+def voz_windows():
+    """Prepara a voz Maria do Windows (SAPI), que funciona offline."""
+    import comtypes.client
+    comtypes.CoInitialize()
+    voz = comtypes.client.CreateObject("SAPI.SpVoice")
+    for v in voz.GetVoices():
+        if "pt-BR" in v.GetDescription() or "Maria" in v.GetDescription():
+            voz.Voice = v
+            break
+    return voz
+
+
+def narrador():
+    """Thread que fala as mensagens da fila, uma de cada vez.
+    VOZ, VELOCIDADE e VOLUME são lidos a cada fala, para valer o que mudar durante a live."""
+    import asyncio
+    import tempfile
+    import edge_tts
+
+    caminho = os.path.join(tempfile.gettempdir(), "tiktok_fala.mp3")
+    sapi = None  # só criada se a voz "windows" for usada
+    while True:
+        texto = fila.get()
+        try:
+            if VOZ == "windows":
+                if sapi is None:
+                    sapi = voz_windows()
+                sapi.Rate = VELOCIDADE
+                sapi.Volume = VOLUME
+                sapi.Speak(texto)
+            else:
+                taxa = f"{VELOCIDADE * 10:+d}%"
+                asyncio.run(edge_tts.Communicate(texto, VOZ, rate=taxa).save(caminho))
+                tocar_mp3(caminho)
+        except Exception as e:
+            print(f"[erro na voz: {e}]")
+
+
+ARQUIVO_APELIDOS = os.path.join(PASTA, "apelidos.txt")
+
+
+def carregar_apelidos() -> dict:
+    """Lê apelidos.txt a cada mensagem, para valer mesmo se editado durante a live."""
+    apelidos = {}
+    try:
+        with open(ARQUIVO_APELIDOS, encoding="utf-8-sig") as f:
+            for linha in f:
+                linha = linha.strip()
+                if not linha or linha.startswith("#") or "=" not in linha:
+                    continue
+                usuario, apelido = linha.split("=", 1)
+                apelidos[usuario.strip().lstrip("@").lower()] = apelido.strip()
+    except (FileNotFoundError, UnicodeDecodeError):
+        pass
+    return apelidos
+
+
+def limpar(texto: str) -> str:
+    texto = re.sub(r"https?://\S+", "link", texto)
+    texto = re.sub(r"(.)\1{4,}", r"\1\1\1", texto)  # "kkkkkkkkk" -> "kkk"
+    return texto[:TAMANHO_MAXIMO].strip()
+
+
+def falar(texto: str):
+    """Coloca na fila de fala; se o chat estiver muito rápido, descarta as mais antigas."""
+    while fila.qsize() >= FILA_MAXIMA:
+        try:
+            fila.get_nowait()
+        except queue.Empty:
+            break
+    fila.put(texto)
+
+
+def limpar_fila():
+    while True:
+        try:
+            fila.get_nowait()
+        except queue.Empty:
+            return
+
+
+def salvar_apelido(uid: str, apelido: str):
+    """Grava (ou troca) o apelido da pessoa no apelidos.txt."""
+    linhas = []
+    try:
+        with open(ARQUIVO_APELIDOS, encoding="utf-8-sig") as f:
+            linhas = [l for l in f.read().splitlines()
+                      if l.split("=", 1)[0].strip().lstrip("@").lower() != uid]
+    except FileNotFoundError:
+        pass
+    linhas.append(f"{uid} = {apelido}")
+    with open(ARQUIVO_APELIDOS, "w", encoding="utf-8") as f:
+        f.write("\n".join(linhas) + "\n")
+
+
+def copiar_texto(texto: str):
+    """Copia o texto para a área de transferência do Windows (o mesmo do Ctrl+C)."""
+    import ctypes
+    from ctypes import wintypes
+    k32, u32 = ctypes.windll.kernel32, ctypes.windll.user32
+    k32.GlobalAlloc.restype = wintypes.HGLOBAL
+    k32.GlobalAlloc.argtypes = [wintypes.UINT, ctypes.c_size_t]
+    k32.GlobalLock.restype = wintypes.LPVOID
+    k32.GlobalLock.argtypes = [wintypes.HGLOBAL]
+    k32.GlobalUnlock.argtypes = [wintypes.HGLOBAL]
+    u32.SetClipboardData.restype = wintypes.HANDLE
+    u32.SetClipboardData.argtypes = [wintypes.UINT, wintypes.HANDLE]
+    dados = texto.encode("utf-16-le") + b"\0\0"
+    for _ in range(10):  # outro programa pode estar usando a área de transferência
+        if u32.OpenClipboard(None):
+            break
+        time.sleep(0.05)
+    else:
+        raise OSError("área de transferência ocupada")
+    try:
+        u32.EmptyClipboard()
+        h = k32.GlobalAlloc(0x0002, len(dados))  # GMEM_MOVEABLE
+        ctypes.memmove(k32.GlobalLock(h), dados, len(dados))
+        k32.GlobalUnlock(h)
+        u32.SetClipboardData(13, h)  # CF_UNICODETEXT
+    finally:
+        u32.CloseClipboard()
+
+
+# ---------------- Pedidos de mapas do osu! ----------------
+ARQUIVO_PEDIDOS = os.path.join(PASTA, "pedidos.txt")
+pedidos = []            # [{"uid", "nome", "texto", "url"}], na ordem em que chegaram
+pedidos_abertos = True  # !fecharpedidos / !abrirpedidos
+
+
+def link_do_pedido(texto: str) -> str:
+    """Link do beatmap, se a pessoa mandou um; senão, a busca do osu! com o que ela escreveu."""
+    m = re.search(r"osu\.ppy\.sh/\S+", texto)
+    if m:
+        return "https://" + m.group(0)
+    return "https://osu.ppy.sh/beatmapsets?q=" + urllib.parse.quote(texto)
+
+
+def salvar_pedidos():
+    """Mantém o pedidos.txt atualizado, para você ver a fila durante a live."""
+    try:
+        with open(ARQUIVO_PEDIDOS, "w", encoding="utf-8") as f:
+            for i, p in enumerate(pedidos, 1):
+                f.write(f"{i}. {p['nome']} (@{p['uid']}): {p['texto']}\n   {p['url']}\n")
+    except OSError:
+        pass
+
+
+# ---------------- osu! via tosu ----------------
+osu = None              # últimos dados do tosu (None = tosu fechado)
+JOGANDO = 2             # número do estado "play" no tosu
+recorde = None          # melhor jogada da live: {"pp", "mapa", "mods"}
+
+
+def numero(n, casas=0) -> str:
+    """Formata no jeito brasileiro: 124519 -> 124.519, 6.55 -> 6,6."""
+    return f"{n:,.{casas}f}".replace(",", "X").replace(".", ",").replace("X", ".")
+
+
+def descrever_mapa(d) -> str:
+    b = d["beatmap"]
+    texto = f"{b['artist']} - {b['title']}, dificuldade {b['version']}, " \
+            f"{numero(b['stats']['stars']['total'], 1)} estrelas"
+    mods = d["play"]["mods"]["name"] if d["state"]["number"] == JOGANDO else ""
+    return texto + (f", com {separar_mods(mods)}" if mods else "")
+
+
+def separar_mods(mods: str) -> str:
+    """'HDDT' -> 'HD DT', para a voz soletrar cada mod."""
+    return " ".join(mods[i:i + 2] for i in range(0, len(mods), 2))
+
+
+def vigia_osu():
+    """Thread que lê o tosu a cada 2 segundos: avisa mapa novo e recorde de PP da live."""
+    global osu, recorde
+    ultimo_mapa = None
+    ultimo_resultado = None
+    while True:
+        try:
+            with urllib.request.urlopen(TOSU_URL, timeout=2) as r:
+                osu = json.loads(r.read().decode("utf-8"))
+            res = osu["resultsScreen"]
+            # sem o id do mapa na chave: se você troca de mapa ainda na tela de resultado, o tosu
+            # recalcula o PP do resultado antigo no mapa novo, e isso não pode virar recorde
+            chave = (res["score"], res["createdAt"])
+            # a tela de resultado só aparece quando você passa o mapa (fail não conta)
+            if "result" in osu["state"]["name"].lower() and res["score"] and chave != ultimo_resultado:
+                pp = res["pp"]["current"]
+                if pp > 0:
+                    ultimo_resultado = chave  # só depois que o tosu calculou o PP
+                if pp > 0 and (recorde is None or pp > recorde["pp"]):
+                    recorde = {"pp": pp, "mapa": osu["beatmap"]["title"], "mods": res["mods"]["name"]}
+                    com = f", com {separar_mods(recorde['mods'])}" if recorde["mods"] else ""
+                    print(f"[recorde da live: {pp:.0f} PP em {recorde['mapa']}{com}]")
+                    if AVISAR_RECORDE and not pausado:
+                        falar(f"Novo recorde da live! {numero(pp)} PP em {recorde['mapa']}{com}.")
+            if osu["state"]["number"] == JOGANDO and osu["beatmap"]["id"] != ultimo_mapa:
+                ultimo_mapa = osu["beatmap"]["id"]
+                print(f"[mapa: {descrever_mapa(osu)}]\n  https://osu.ppy.sh/b/{ultimo_mapa}")
+                if AVISAR_MAPA and not pausado:
+                    falar("Agora: " + descrever_mapa(osu) + ".")
+        except Exception:
+            osu = None
+        time.sleep(2)
+
+
+# ---------------- Comandos do chat ----------------
+pausado = False         # !mudo / !voltar
+ultimo_comando = {}     # unique_id -> horário do último comando (anti-spam)
+
+COMANDOS_PUBLICOS = ["np", "pp", "rank", "recorde", "pedir", "pedidos", "apelido", "mensagens",
+                     "top", "copiar"]
+COMANDOS_MOD = ["mudo", "voltar", "limpar", "velocidade", "volume", "nomes", "bloquear",
+                "proximo", "fecharpedidos", "abrirpedidos", "zerarpedidos"]
+APELIDOS_COMANDO = {"ajuda": "comandos", "mapa": "np", "próximo": "proximo"}
+
+
+def desativado(cmd: str) -> bool:
+    return APELIDOS_COMANDO.get(cmd, cmd) in [c.lstrip(PREFIXO).lower() for c in COMANDOS_DESATIVADOS]
+
+
+FALADO = {"proximo": "próximo", "fecharpedidos": "fechar pedidos", "abrirpedidos": "abrir pedidos",
+          "zerarpedidos": "zerar pedidos"}  # como a voz fala o nome de cada comando
+
+
+def ajuda(lista, titulo: str) -> str:
+    nomes = [FALADO.get(c, c) for c in lista if not desativado(c)]
+    if not nomes:
+        return "Nenhum comando ligado."
+    texto = ", ".join(nomes[:-1]) + " e " + nomes[-1] if len(nomes) > 1 else nomes[0]
+    return f"{titulo}: {texto}. Use com exclamação, por exemplo: exclamação {nomes[0]}."
+
+
+def tratar_comando(user, nome: str, texto: str, dono: str) -> bool:
+    """Executa um comando do chat. Retorna True se era um comando (e não deve ser lido)."""
+    global pausado, VELOCIDADE, VOLUME, LER_NOME, pedidos_abertos
+    if not texto.startswith(PREFIXO):
+        return False
+    partes = texto[len(PREFIXO):].split(maxsplit=1)
+    if not partes:
+        return False
+    cmd = partes[0].lower()
+    arg = partes[1].strip() if len(partes) > 1 else ""
+    uid = (user.unique_id or "").lower()
+    if cmd in ("fechar", "abrir", "zerar") and arg.lower() == "pedidos":
+        cmd, arg = cmd + "pedidos", ""  # aceita "!fechar pedidos" com espaço
+    if desativado(cmd):
+        return True  # comando desligado em COMANDOS_DESATIVADOS: ignora calado
+    eh_mod = uid == dono.lower() or uid in [m.lstrip("@").lower() for m in MODERADORES]
+
+    # --- moderação (só você e os MODERADORES) ---
+    if eh_mod:
+        if cmd == "mudo":
+            pausado = True
+            limpar_fila()
+            print("[leitura pausada]")
+            return True
+        if cmd == "voltar":
+            pausado = False
+            falar("Voltei a ler o chat.")
+            return True
+        if cmd == "limpar":
+            limpar_fila()
+            print("[fila de fala limpa]")
+            return True
+        if cmd in ("velocidade", "volume"):
+            try:
+                n = int(arg)
+            except ValueError:
+                falar(f"Use: exclamação {cmd} e um número.")
+                return True
+            if cmd == "velocidade":
+                VELOCIDADE = max(-10, min(10, n))
+                falar(f"Velocidade {VELOCIDADE}.")
+            else:
+                VOLUME = max(0, min(100, n))
+                falar(f"Volume {VOLUME}.")
+            return True
+        if cmd == "nomes":
+            LER_NOME = not LER_NOME
+            falar("Vou ler os nomes." if LER_NOME else "Não vou mais ler os nomes.")
+            return True
+        if cmd == "bloquear" and arg:
+            PALAVRAS_BLOQUEADAS.append(arg.lower())
+            print(f"[palavra bloqueada: {arg}]")
+            return True
+        if cmd in ("proximo", "próximo"):
+            if not pedidos:
+                falar("Não tem nenhum pedido na fila.")
+                return True
+            p = pedidos.pop(0)
+            salvar_pedidos()
+            webbrowser.open(p["url"])
+            print(f"[pedido de {p['nome']}: {p['texto']}]\n  {p['url']}")
+            falar(f"Próximo pedido, de {p['nome']}. Faltam {len(pedidos)}.")
+            return True
+        if cmd in ("fecharpedidos", "abrirpedidos"):
+            pedidos_abertos = cmd == "abrirpedidos"
+            falar("Pedidos abertos!" if pedidos_abertos else "Pedidos fechados.")
+            return True
+        if cmd == "zerarpedidos":
+            pedidos.clear()
+            salvar_pedidos()
+            falar("Fila de pedidos zerada.")
+            return True
+
+    if cmd in ("mudo", "voltar", "limpar", "velocidade", "volume", "nomes", "bloquear",
+               "proximo", "próximo", "fecharpedidos", "abrirpedidos", "zerarpedidos"):
+        return True  # comando de moderação vindo de quem não pode: ignora calado
+
+    # --- comandos de todo mundo ---
+    if cmd not in ("comandos", "ajuda", "apelido", "mensagens", "top", "copiar",
+                   "pedir", "pedidos", "np", "mapa", "pp", "rank", "recorde"):
+        return False
+    agora = time.time()
+    if not eh_mod and agora - ultimo_comando.get(uid, 0) < ESPERA_COMANDO:
+        return True  # anti-spam: ignora calado
+    ultimo_comando[uid] = agora
+    if pausado:
+        return True
+
+    if cmd in ("comandos", "ajuda"):
+        falar(ajuda(COMANDOS_MOD, "Comandos de moderação") if eh_mod else ajuda(COMANDOS_PUBLICOS, "Comandos"))
+    elif cmd == "apelido":
+        apelido = limpar(arg)[:30]
+        if not apelido:
+            falar(f"{nome}, escreve o apelido depois do comando.")
+        elif any(p.lower() in apelido.lower() for p in PALAVRAS_BLOQUEADAS):
+            falar(f"{nome}, esse apelido não pode.")
+        else:
+            salvar_apelido(uid, apelido)
+            falar(f"Beleza, agora vou te chamar de {apelido}.")
+    elif cmd == "mensagens":
+        with trava:
+            n = pessoas.get(user.unique_id, {}).get("mensagens", 0)
+        falar(f"{nome}, você mandou {n} {'mensagem' if n == 1 else 'mensagens'} nesta live.")
+    elif cmd == "top":
+        with trava:
+            top = sorted(pessoas.items(), key=lambda kv: -kv[1]["mensagens"])[:3]
+        apelidos = carregar_apelidos()
+        nomes = [f"{apelidos.get(u.lower(), p['nome'])}, com {p['mensagens']}"
+                 for u, p in top if p["mensagens"]]
+        falar("Quem mais falou: " + "; ".join(nomes) + "." if nomes else "Ninguém falou ainda.")
+    elif cmd == "recorde":
+        if recorde:
+            com = f", com {separar_mods(recorde['mods'])}" if recorde["mods"] else ""
+            falar(f"O recorde da live é {numero(recorde['pp'])} PP em {recorde['mapa']}{com}.")
+        else:
+            falar("Ainda não tem recorde nesta live.")
+    elif cmd in ("np", "mapa", "pp", "rank"):
+        d = osu
+        if not d:
+            falar("Não consegui ver o osu agora.")
+        elif cmd in ("np", "mapa"):
+            falar("Agora: " + descrever_mapa(d) + ".")
+            print(f"  https://osu.ppy.sh/b/{d['beatmap']['id']}")
+        elif cmd == "pp":
+            pp = d["performance"]["accuracy"]  # o tosu já calcula com os mods selecionados
+            mods = d["play"]["mods"]["name"]
+            com = f"com {separar_mods(mods)}" if mods else "sem mods"
+            falar(f"SS {com} vale {numero(pp['100'])} PP. "
+                  f"Com 98 por cento, {numero(pp['98'])}, e com 95, {numero(pp['95'])}.")
+        else:
+            p = d["profile"]
+            falar(f"{p['name']} está em número {numero(p['globalRank'])} no mundo, "
+                  f"com {numero(p['pp'])} PP e {numero(p['accuracy'], 2)} por cento de precisão.")
+    elif cmd == "pedir":
+        meu = next((i for i, p in enumerate(pedidos, 1) if p["uid"] == uid), None)
+        if not pedidos_abertos:
+            falar(f"{nome}, os pedidos estão fechados agora.")
+        elif not arg:
+            falar(f"{nome}, manda o link ou o nome do mapa depois do comando.")
+        elif meu:
+            falar(f"{nome}, você já tem um pedido na fila, na posição {meu}.")
+        elif len(pedidos) >= PEDIDOS_MAXIMOS:
+            falar(f"{nome}, a fila de pedidos está cheia.")
+        elif any(p.lower() in arg.lower() for p in PALAVRAS_BLOQUEADAS):
+            falar(f"{nome}, esse pedido não pode.")
+        else:
+            pedidos.append({"uid": uid, "nome": nome, "texto": arg, "url": link_do_pedido(arg)})
+            salvar_pedidos()
+            print(f"[novo pedido de {nome}: {arg}]")
+            falar(f"Pedido de {nome} anotado, posição {len(pedidos)}.")
+    elif cmd == "pedidos":
+        meu = next((i for i, p in enumerate(pedidos, 1) if p["uid"] == uid), None)
+        n = len(pedidos)
+        texto = "Não tem pedidos na fila." if n == 0 else \
+            f"Tem {n} {'pedido' if n == 1 else 'pedidos'} na fila."
+        if meu:
+            texto += f" O seu é o número {meu}."
+        if not pedidos_abertos:
+            texto += " Os pedidos estão fechados."
+        falar(texto)
+    elif cmd == "copiar":
+        if not arg:
+            falar(f"{nome}, escreve o que quer copiar depois do comando.")
+            return True
+        try:
+            copiar_texto(arg)  # texto original, sem cortar links
+            print(f"[copiado de {nome}: {arg}]")
+            falar(f"Copiei a mensagem de {nome}.")
+        except OSError as e:
+            print(f"[não deu para copiar: {e}]")
+    return True
+
+
+# ---------------- Página de configurações ----------------
+class PaginaConfig(http.server.BaseHTTPRequestHandler):
+    def log_message(self, *args):
+        pass  # não enche a janela com cada acesso à página
+
+    def host_ok(self) -> bool:
+        """Só aceita quem acessa pelo IP ou por localhost: impede que um site qualquer aberto
+        no navegador se passe pela página e mude as configurações."""
+        host = (self.headers.get("Host") or "").rsplit(":", 1)[0].strip("[]")
+        if host == "localhost":
+            return True
+        try:
+            ipaddress.ip_address(host)
+            return True
+        except ValueError:
+            return False
+
+    def responder(self, codigo: int, tipo: str, corpo: bytes):
+        self.send_response(codigo)
+        self.send_header("Content-Type", tipo)
+        self.send_header("Content-Length", str(len(corpo)))
+        self.send_header("Cache-Control", "no-store")
+        self.end_headers()
+        self.wfile.write(corpo)
+
+    def responder_json(self, dados, codigo=200):
+        self.responder(codigo, "application/json; charset=utf-8",
+                       json.dumps(dados, ensure_ascii=False).encode("utf-8"))
+
+    def dados_da_pagina(self) -> dict:
+        return {"config": config_atual(), "comandos": ["comandos"] + COMANDOS_PUBLICOS + COMANDOS_MOD,
+                "apelidos": APELIDOS_COMANDO}
+
+    def do_GET(self):
+        if not self.host_ok():
+            return self.responder(403, "text/plain; charset=utf-8", b"acesso negado")
+        if self.path == "/":
+            self.responder(200, "text/html; charset=utf-8", PAGINA.encode("utf-8"))
+        elif self.path == "/api/config":
+            self.responder_json(self.dados_da_pagina())
+        else:
+            self.responder(404, "text/plain; charset=utf-8", b"nada aqui")
+
+    def do_POST(self):
+        # exigir JSON faz o navegador barrar envios vindos de outros sites
+        if not self.host_ok() or self.path != "/api/config" or \
+                not (self.headers.get("Content-Type") or "").startswith("application/json"):
+            return self.responder(403, "text/plain; charset=utf-8", b"acesso negado")
+        try:
+            dados = json.loads(self.rfile.read(int(self.headers.get("Content-Length", 0))).decode("utf-8"))
+            if not isinstance(dados, dict):
+                raise ValueError
+        except (ValueError, UnicodeDecodeError):
+            return self.responder_json({"erro": "dados inválidos"}, 400)
+        avisos = aplicar_config(dados)
+        try:
+            salvar_config()
+        except OSError as e:
+            avisos.append(f"mudei agora, mas não consegui gravar o config.json ({e}).")
+        print("[configurações alteradas pela página]")
+        for aviso in avisos:
+            print(f"*** {aviso}")
+        self.responder_json({"avisos": avisos, **self.dados_da_pagina()})
+
+
+def ip_local() -> str:
+    """IP deste PC na rede local (o que o celular usa para abrir a página)."""
+    import socket
+    with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as s:
+        try:
+            s.connect(("8.8.8.8", 80))  # não envia nada, só descobre por qual placa de rede sairia
+            return s.getsockname()[0]
+        except OSError:
+            return "IP-deste-PC"
+
+
+def iniciar_pagina():
+    if not WEB_PORTA:
+        return
+    endereco = "0.0.0.0" if WEB_REDE_LOCAL else "127.0.0.1"
+    try:
+        servidor = http.server.ThreadingHTTPServer((endereco, WEB_PORTA), PaginaConfig)
+    except OSError:
+        print(f"*** Não consegui abrir a página de configurações na porta {WEB_PORTA} (outro programa usando?).\n"
+              f"*** Troque \"web_porta\" no config.json para outro número, por exemplo 8766.\n")
+        return
+    threading.Thread(target=servidor.serve_forever, daemon=True).start()
+    print(f"Página de configurações: http://localhost:{WEB_PORTA}")
+    if WEB_REDE_LOCAL:
+        print(f"  no celular ou outro PC da mesma rede: http://{ip_local()}:{WEB_PORTA}")
+    print()
+
+
+PAGINA = """<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Leitor de Chat</title>
+<style>
+:root { color-scheme: light dark; --fundo: #f3f3f6; --cartao: #fff; --texto: #1d1d22; --suave: #666a75;
+        --borda: #d9dbe1; --destaque: #e0245e; --erro: #c62828; }
+@media (prefers-color-scheme: dark) {
+  :root { --fundo: #16161a; --cartao: #212127; --texto: #ececf1; --suave: #9a9ca8; --borda: #36363e; --erro: #ef6c6c; }
+}
+* { box-sizing: border-box; }
+body { margin: 0; font: 15px/1.45 system-ui, "Segoe UI", sans-serif; background: var(--fundo); color: var(--texto); }
+main { max-width: 720px; margin: 0 auto; padding: 16px 16px 110px; }
+h1 { font-size: 22px; margin: 8px 0 4px; }
+.sub { color: var(--suave); margin: 0 0 16px; }
+section { background: var(--cartao); border: 1px solid var(--borda); border-radius: 10px; padding: 14px 16px; margin-bottom: 14px; }
+h2 { font-size: 16px; margin: 0 0 4px; }
+label { display: block; margin: 12px 0 4px; font-weight: 600; }
+small { display: block; color: var(--suave); font-weight: 400; }
+input[type=text], input[type=number], select, textarea { width: 100%; padding: 8px; border: 1px solid var(--borda);
+  border-radius: 6px; background: var(--fundo); color: inherit; font: inherit; }
+textarea { min-height: 72px; resize: vertical; }
+label.check { display: flex; gap: 8px; align-items: flex-start; }
+label.check input { margin-top: 4px; }
+.faixa { display: flex; gap: 10px; align-items: center; }
+.faixa input { flex: 1; }
+.faixa output { min-width: 3ch; text-align: right; font-variant-numeric: tabular-nums; }
+.cmds { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 4px 12px; margin-top: 8px; }
+.cmds label { font-weight: 400; margin: 0; display: flex; gap: 6px; align-items: center; }
+.barra { position: fixed; left: 0; right: 0; bottom: 0; background: var(--cartao); border-top: 1px solid var(--borda);
+  padding: 12px 16px; display: flex; gap: 10px; align-items: center; justify-content: center; flex-wrap: wrap; }
+button { font: inherit; padding: 9px 18px; border-radius: 6px; border: 1px solid var(--borda); background: var(--fundo);
+  color: inherit; cursor: pointer; }
+button.principal { background: var(--destaque); border-color: var(--destaque); color: #fff; font-weight: 600; }
+#status { color: var(--suave); flex: 1 1 260px; max-width: 420px; }
+#status.erro { color: var(--erro); }
+</style>
+</head>
+<body>
+<main>
+  <h1>Leitor de Chat</h1>
+  <p class="sub">Ao salvar, as mudanças já valem na live e ficam gravadas no config.json.</p>
+
+  <section>
+    <h2>Voz</h2>
+    <label for="voz">Voz</label>
+    <select id="voz">
+      <option value="pt-BR-FranciscaNeural">Francisca (feminina)</option>
+      <option value="pt-BR-ThalitaMultilingualNeural">Thalita (feminina)</option>
+      <option value="pt-BR-AntonioNeural">Antonio (masculina)</option>
+      <option value="pt-PT-RaquelNeural">Raquel (feminina, Portugal)</option>
+      <option value="pt-PT-DuarteNeural">Duarte (masculina, Portugal)</option>
+      <option value="windows">Maria do Windows (funciona sem internet)</option>
+    </select>
+    <label for="velocidade">Velocidade</label>
+    <div class="faixa"><input type="range" id="velocidade" min="-10" max="10" step="1"><output for="velocidade"></output></div>
+    <label for="volume">Volume</label>
+    <div class="faixa"><input type="range" id="volume" min="0" max="100" step="1"><output for="volume"></output></div>
+  </section>
+
+  <section>
+    <h2>Leitura do chat</h2>
+    <label class="check"><input type="checkbox" id="ler_nome"><span>Falar o nome antes da mensagem<small>"Fulano disse: ..."</small></span></label>
+    <label for="tamanho_maximo">Tamanho máximo da mensagem<small>Letras; o resto é cortado.</small></label>
+    <input type="number" id="tamanho_maximo" min="1">
+    <label for="fila_maxima">Tamanho da fila de fala<small>Se o chat estiver rápido demais, as mensagens mais antigas são puladas.</small></label>
+    <input type="number" id="fila_maxima" min="1">
+    <label for="palavras_bloqueadas">Palavras bloqueadas<small>Uma por linha. Mensagens com elas não são lidas.</small></label>
+    <textarea id="palavras_bloqueadas"></textarea>
+  </section>
+
+  <section>
+    <h2>Comandos</h2>
+    <label for="prefixo">Prefixo<small>O símbolo antes dos comandos.</small></label>
+    <input type="text" id="prefixo" maxlength="5">
+    <label for="moderadores">Moderadores<small>Usuários do TikTok, sem @, um por linha. Podem usar os comandos de moderação.</small></label>
+    <textarea id="moderadores"></textarea>
+    <label for="espera_comando">Espera entre comandos (segundos)<small>Anti-spam: quanto cada pessoa espera entre um comando e outro.</small></label>
+    <input type="number" id="espera_comando" min="0">
+    <label>Comandos ligados<small>Desmarque para desligar um comando.</small></label>
+    <div class="cmds" id="cmds"></div>
+  </section>
+
+  <section>
+    <h2>Pedidos de mapas</h2>
+    <label for="pedidos_maximos">Tamanho máximo da fila de pedidos</label>
+    <input type="number" id="pedidos_maximos" min="1">
+  </section>
+
+  <section>
+    <h2>osu!</h2>
+    <label class="check"><input type="checkbox" id="avisar_mapa"><span>Avisar mapa novo<small>Fala "Agora: Artista - Música" quando você começa um mapa.</small></span></label>
+    <label class="check"><input type="checkbox" id="avisar_recorde"><span>Avisar recorde de PP da live</span></label>
+    <label for="tosu_url">Endereço do tosu<small>Só mude se tiver mudado no tosu.</small></label>
+    <input type="text" id="tosu_url">
+  </section>
+
+  <section>
+    <h2>Esta página</h2>
+    <p class="sub" style="margin:4px 0 0">Estas duas só valem quando o programa abre de novo.</p>
+    <label for="web_porta">Porta<small>0 desliga a página.</small></label>
+    <input type="number" id="web_porta" min="0" max="65535">
+    <label class="check"><input type="checkbox" id="web_rede_local"><span>Abrir na rede local<small>Para mexer pelo celular. Qualquer pessoa no mesmo Wi-Fi também vai conseguir.</small></span></label>
+  </section>
+</main>
+
+<div class="barra">
+  <span id="status" role="status"></span>
+  <button type="button" id="recarregar">Recarregar</button>
+  <button type="button" class="principal" id="salvar">Salvar</button>
+</div>
+
+<script>
+const $ = id => document.getElementById(id);
+const LISTAS = ["palavras_bloqueadas", "moderadores"];
+let comandos = [], apelidos = {}, chaves = [];
+
+function status(texto, erro) {
+  $("status").textContent = texto;
+  $("status").className = erro ? "erro" : "";
+}
+
+function atualizarFaixas() {
+  document.querySelectorAll(".faixa").forEach(f => f.querySelector("output").textContent = f.querySelector("input").value);
+}
+
+function preencher(d) {
+  comandos = d.comandos; apelidos = d.apelidos;
+  const c = d.config;
+  chaves = Object.keys(c);
+  const voz = $("voz");
+  if (![...voz.options].some(o => o.value === c.voz)) voz.add(new Option(c.voz, c.voz));
+  for (const k of chaves) {
+    const el = $(k);
+    if (!el) continue;
+    if (el.type === "checkbox") el.checked = c[k];
+    else if (LISTAS.includes(k)) el.value = c[k].join("\\n");
+    else el.value = c[k];
+  }
+  const desligados = new Set(c.comandos_desativados.map(x => {
+    x = x.replace(/^!+/, "").toLowerCase();
+    return apelidos[x] || x;
+  }));
+  $("cmds").replaceChildren(...comandos.map(cmd => {
+    const l = document.createElement("label"), i = document.createElement("input");
+    i.type = "checkbox"; i.value = cmd; i.checked = !desligados.has(cmd);
+    l.append(i, c.prefixo + cmd);
+    return l;
+  }));
+  atualizarFaixas();
+}
+
+function coletar() {
+  const c = {};
+  for (const k of chaves) {
+    const el = $(k);
+    if (!el) continue;
+    if (el.type === "checkbox") c[k] = el.checked;
+    else if (LISTAS.includes(k)) c[k] = el.value.split("\\n").map(s => s.trim()).filter(Boolean);
+    else if (el.type === "number" || el.type === "range") c[k] = Number(el.value);
+    else c[k] = el.value;
+  }
+  c.comandos_desativados = [...document.querySelectorAll("#cmds input")].filter(i => !i.checked).map(i => i.value);
+  return c;
+}
+
+async function carregar() {
+  try {
+    const r = await fetch("/api/config");
+    preencher(await r.json());
+    status("");
+  } catch (e) {
+    status("Não consegui falar com o programa. Ele está aberto?", true);
+  }
+}
+
+async function salvar() {
+  status("Salvando...");
+  try {
+    const r = await fetch("/api/config", {method: "POST", headers: {"Content-Type": "application/json"},
+                                          body: JSON.stringify(coletar())});
+    const d = await r.json();
+    if (!r.ok) throw new Error(d.erro || r.status);
+    preencher(d);
+    if (d.avisos.length) status("Salvo, mas: " + d.avisos.join(" "), true);
+    else status("Salvo! Já está valendo.");
+  } catch (e) {
+    status("Não consegui salvar. O programa está aberto?", true);
+  }
+}
+
+document.addEventListener("input", e => { if (e.target.type === "range") atualizarFaixas(); });
+$("salvar").onclick = salvar;
+$("recarregar").onclick = carregar;
+carregar();
+</script>
+</body>
+</html>
+"""
+
+
+def processar_comentario(user, comentario: str, dono: str):
+    """Um comentário do chat: comando ou mensagem para ler em voz alta."""
+    nome = user.nick_name or user.unique_id
+    nome = carregar_apelidos().get((user.unique_id or "").lower(), nome)
+    msg = limpar(comentario)
+    print(f"{nome}: {comentario}")
+    registrar(user, mensagem=True)
+    if tratar_comando(user, nome, comentario.strip(), dono):
+        return
+    if pausado or not msg or any(p.lower() in msg.lower() for p in PALAVRAS_BLOQUEADAS):
+        return
+    falar(f"{nome} disse: {msg}" if LER_NOME else msg)
+
+
+def modo_teste():
+    """Simula o chat sem live: cada linha digitada vira um comentário."""
+    from types import SimpleNamespace
+    dono = "voce"
+    print("MODO DE TESTE: sem live, o que você digitar aqui entra como mensagem do chat.\n"
+          "  oi                -> mensagem sua (você é o dono: pode usar os comandos de moderação)\n"
+          "  Fulano: oi        -> mensagem de outra pessoa, chamada Fulano\n"
+          "  sair (ou Ctrl+C)  -> fecha\n"
+          "Atenção: apelidos e pedidos ficam gravados de verdade (apelidos.txt e pedidos.txt).\n")
+    falar("Modo de teste ligado.")
+    while True:
+        try:
+            linha = input().strip()
+        except (EOFError, KeyboardInterrupt):
+            break
+        if linha.lower() == "sair":
+            break
+        if not linha:
+            continue
+        m = re.match(r"(\w+):\s+(.+)", linha)  # "Fulano: oi" (links como https://... não entram aqui)
+        nome, texto = (m.group(1), m.group(2)) if m else ("Você", linha)
+        uid = nome.lower() if m else dono
+        processar_comentario(SimpleNamespace(unique_id=uid, nick_name=nome), texto, dono)
+
+
+def main():
+    carregar_config()
+    iniciar_pagina()
+    if len(sys.argv) > 1:
+        usuario = sys.argv[1]
+    else:
+        usuario = input("Seu usuário do TikTok (sem @): ")
+    usuario = usuario.strip().lstrip("@")
+    if usuario.lower() in ("teste", "--teste"):
+        threading.Thread(target=narrador, daemon=True).start()
+        threading.Thread(target=vigia_osu, daemon=True).start()
+        return modo_teste()
+
+    os.makedirs(PASTA_REGISTROS, exist_ok=True)
+    arquivo = os.path.join(PASTA_REGISTROS, f"live_{datetime.now():%Y-%m-%d_%H-%M}.csv")
+
+    threading.Thread(target=narrador, daemon=True).start()
+    threading.Thread(target=salvador_automatico, args=(arquivo,), daemon=True).start()
+    threading.Thread(target=vigia_osu, daemon=True).start()
+    client = TikTokLiveClient(unique_id=f"@{usuario}")
+
+    @client.on(JoinEvent)
+    async def ao_entrar(event: JoinEvent):
+        registrar(event.user)
+
+    @client.on(ConnectEvent)
+    async def ao_conectar(event: ConnectEvent):
+        print(f"Conectado à live de @{usuario}! Lendo o chat...\n")
+        fila.put("Conectado ao chat da live.")
+
+    @client.on(DisconnectEvent)
+    async def ao_desconectar(event: DisconnectEvent):
+        print("Desconectado da live.")
+
+    @client.on(CommentEvent)
+    async def ao_comentar(event: CommentEvent):
+        processar_comentario(event.user, event.comment or "", usuario)
+
+    print(f"Conectando a @{usuario}... (Ctrl+C para sair)")
+    erro = False
+    try:
+        client.run()
+    except KeyboardInterrupt:
+        pass
+    except Exception as e:
+        print(f"\nErro: {e}\nVerifique se o usuário está certo e se a live está ao vivo.")
+        erro = True
+    finally:
+        try:
+            salvar(arquivo)
+        except PermissionError:
+            print("Feche a planilha no Excel para salvar a versão final.")
+        if pessoas:
+            print(f"\nRegistro salvo em: {arquivo}")
+    if erro or getattr(sys, "frozen", False):  # no .exe a janela fecharia sem dar tempo de ler
+        input("Pressione Enter para sair...")
+
+
+if __name__ == "__main__":
+    main()

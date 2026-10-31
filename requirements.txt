@@ -1,0 +1,10 @@
+# Para rodar o leitor_chat.py
+TikTokLive==7.0.1
+edge-tts==7.3.1
+comtypes==1.4.17
+
+# Para gerar o LeitorChat.exe (gerar_exe.bat)
+pyinstaller==6.22.3
+
+# Para gerar o guia em PDF (gerar_manual.py)
+reportlab==5.1.0

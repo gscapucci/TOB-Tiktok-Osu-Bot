@@ -1,0 +1,56 @@
+﻿LEITOR DE CHAT
+Lê o chat da sua live do TikTok em voz alta, responde a comandos
+e se conecta ao osu! para falar do mapa, do PP e do seu rank.
+
+O guia completo está no arquivo "Guia de uso - Leitor de Chat.pdf".
+
+
+ANTES DE TUDO
+  Extraia o zip inteiro para uma pasta. Não abra o programa de dentro do zip.
+
+
+COMO USAR EM CADA LIVE
+  1. Abra o osu!
+  2. Abra o tosu (pasta "tosu", arquivo tosu.exe)
+  3. Comece a live no TikTok
+  4. Abra o LeitorChat.exe e digite seu usuário do TikTok, sem o @
+
+  Para encerrar: Ctrl+C na janela do programa e depois Enter.
+
+  Para testar sem estar ao vivo, digite "teste" no lugar do usuário.
+  O que você digitar na janela entra como mensagem do chat
+  ("Fulano: oi" manda como outra pessoa; "sair" fecha).
+
+  Na primeira vez, o Windows pode avisar "O Windows protegeu o computador".
+  Clique em "Mais informações" e depois em "Executar assim mesmo".
+
+
+ALGUNS COMANDOS DO CHAT
+  !comandos   lista os comandos
+  !np         mapa que você está jogando
+  !pp         quanto PP o mapa vale com os mods atuais
+  !rank       seu rank no osu!
+  !pedir      o chat pede um mapa do osu!
+  !mudo       (só você) para de ler o chat; !voltar volta a ler
+
+
+CONFIGURAÇÕES
+  Com o programa aberto, entre em http://localhost:8765 no navegador.
+  Mude o que quiser e clique em Salvar: vale na hora, sem reabrir.
+
+  Elas ficam gravadas no arquivo config.json, que também dá para editar
+  no Bloco de Notas (salve e abra o programa de novo).
+  As seções 8 e 9 do guia em PDF explicam cada opção e como abrir
+  a página pelo celular.
+
+
+ARQUIVOS
+  LeitorChat.exe                     o programa
+  config.json                        as configurações
+  Guia de uso - Leitor de Chat.pdf   o guia completo
+  tosu\tosu.exe                      lê os dados do osu! (github.com/tosuapp/tosu)
+
+  O programa também cria, nesta pasta:
+  registros\    planilhas de cada live (quem entrou e quantas mensagens mandou)
+  apelidos.txt  apelidos que a voz usa
+  pedidos.txt   fila de pedidos de mapas

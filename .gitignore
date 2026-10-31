@@ -1,0 +1,19 @@
+# Gerados (gerar_exe.bat / zip de distribuição)
+*.exe
+*.zip
+build/
+LeitorChat/
+__pycache__/
+
+# Dados de cada live (têm usuários do TikTok de quem participou)
+registros/
+apelidos.txt
+pedidos.txt
+
+# Anotações pessoais
+bugs.txt
+ideias.txt
+
+# tosu (baixe em github.com/tosuapp/tosu)
+tosu/
+*.log
