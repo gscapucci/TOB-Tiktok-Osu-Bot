@@ -17,7 +17,7 @@ from packaging.requirements import Requirement
 PASTA = os.path.dirname(os.path.abspath(__file__))
 SAIDA = os.path.join(PASTA, "licencas")
 RAIZES = ["TikTokLive", "edge-tts", "comtypes"]  # o que o leitor_chat.py importa (veja requirements.txt)
-REPOSITORIO = "https://github.com/gscapucci/TOB---Tiktok-Osu-Bot"
+REPOSITORIO = "https://github.com/gscapucci/TOB-Tiktok-Osu-Bot"
 
 # pacotes cuja licença precisa de explicação
 OBSERVACOES = {
