@@ -1088,6 +1088,24 @@ def processar_comentario(user, comentario: str, dono: str):
     falar(f"{nome} disse: {msg}" if LER_NOME else msg)
 
 
+lidos = set()  # ids das mensagens já lidas: se a conexão cai e volta, o TikTok pode mandar de novo
+
+
+def comentario_repetido_ou_antigo(event) -> bool:
+    """Mensagem que já foi lida, ou que foi escrita antes de o programa abrir."""
+    common = getattr(event, "common", None)
+    msg_id = getattr(common, "msg_id", 0)
+    if msg_id:
+        if msg_id in lidos:
+            return True
+        lidos.add(msg_id)
+    criada = getattr(common, "create_time", 0) or 0
+    if criada > 10 ** 11:  # o TikTok manda em milissegundos
+        criada /= 1000
+    # folga de 1 minuto para o relógio do computador não bater certinho com o do TikTok
+    return 0 < criada < INICIO.timestamp() - 60
+
+
 def modo_teste():
     """Simula o chat sem live: cada linha digitada vira um comentário."""
     from types import SimpleNamespace
@@ -1150,12 +1168,15 @@ def main():
 
     @client.on(CommentEvent)
     async def ao_comentar(event: CommentEvent):
+        if comentario_repetido_ou_antigo(event):
+            return
         processar_comentario(event.user, event.comment or "", usuario)
 
     print(f"Conectando a @{usuario}... (Ctrl+C para sair)")
     erro = False
     try:
-        client.run()
+        # sem o lote de mensagens recentes que o TikTok manda ao conectar (seriam lidas de novo)
+        client.run(process_connect_events=False)
     except KeyboardInterrupt:
         pass
     except Exception as e:
