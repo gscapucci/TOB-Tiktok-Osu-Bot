@@ -398,7 +398,27 @@ def salvar_pedidos():
 osu = None              # últimos dados do tosu (None = tosu fechado)
 JOGANDO = 2             # número do estado "play" no tosu
 recorde = None          # melhor jogada da live: {"pp", "mapa", "mods"}
-INICIO = datetime.now(timezone.utc)  # scores de antes disto não contam para o recorde
+INICIO = datetime.now(timezone.utc)  # scores e mensagens de antes disto não contam (acertado em acertar_inicio)
+
+
+def acertar_inicio():
+    """Acerta o INICIO pela hora da internet: com o relógio do computador errado, todas as
+    mensagens e scores pareceriam de antes (ou de depois) de o programa abrir."""
+    global INICIO
+    from email.utils import parsedate_to_datetime
+    try:
+        pedido = urllib.request.Request("https://www.tiktok.com", method="HEAD",
+                                        headers={"User-Agent": "Mozilla/5.0"})
+        with urllib.request.urlopen(pedido, timeout=5) as r:
+            internet = parsedate_to_datetime(r.headers["Date"])
+    except Exception:
+        return  # sem internet não tem TikTok nem voz mesmo; fica o relógio do computador
+    diferenca = internet - datetime.now(timezone.utc)
+    INICIO += diferenca
+    if abs(diferenca) > timedelta(minutes=2):
+        minutos = round(diferenca.total_seconds() / 60)
+        print(f"[o relógio do computador está {abs(minutos)} minutos "
+              f"{'atrasado' if minutos > 0 else 'adiantado'}: usando a hora da internet]")
 
 
 def abrir_tosu():
@@ -1135,6 +1155,7 @@ def main():
     carregar_config()
     iniciar_pagina()
     abrir_tosu()
+    acertar_inicio()
     if len(sys.argv) > 1:
         usuario = sys.argv[1]
     else:
