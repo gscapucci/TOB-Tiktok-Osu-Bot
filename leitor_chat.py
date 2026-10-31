@@ -7,13 +7,17 @@ Uso:
 
 Comandos do chat (as respostas são faladas):
     Todo mundo:  !comandos  !apelido <nome>  !mensagens  !top  !copiar <texto>
-    Você e MODERADORES:  !mudo  !voltar  !limpar  !velocidade <-10 a 10>
-                         !volume <0 a 100>  !nomes  !bloquear <palavra>
+    Você e MODERADORES:  !mudo  !voltar  !limpar  !velocidade <-10 a 10>  !volume <0 a 100>
+                         !voz <francisca, antonio, maria...>  !nomes  !bloquear <palavra>
+                         !desbloquear <palavra>  !ligar <comando>  !desligar <comando>
+                         !avisos <mapa ou recorde>  !espera <segundos>  !tamanho <letras>  !fila <mensagens>
+    Só você:  !mod <usuário>  !desmod <usuário>
+    (o que estes comandos mudam fica gravado no config.json)
 
 Pedidos de mapas do osu! (a fila fica salva em pedidos.txt):
     Todo mundo:  !pedir <link ou nome do mapa>  !pedidos
     Você e MODERADORES:  !proximo (abre no navegador)  !fecharpedidos
-                         !abrirpedidos  !zerarpedidos
+                         !abrirpedidos  !zerarpedidos  !limitepedidos <número>
 
 osu! (precisa do tosu aberto):  !np (mapa atual)  !pp  !rank  !recorde
     e avisos automáticos de mapa novo (AVISAR_MAPA) e de recorde de PP da live (AVISAR_RECORDE)
@@ -101,6 +105,22 @@ def config_atual() -> dict:
 def salvar_config():
     with open(ARQUIVO_CONFIG, "w", encoding="utf-8") as f:
         json.dump(config_atual(), f, ensure_ascii=False, indent=2)
+
+
+trava_config = threading.Lock()  # o chat e a página podem mudar as configurações ao mesmo tempo
+
+
+def mudar_config(mudancas: dict) -> list:
+    """Aplica as mudanças (do chat ou da página) e grava no config.json. Devolve os avisos."""
+    with trava_config:
+        avisos = aplicar_config(mudancas)
+        try:
+            salvar_config()
+        except OSError as e:
+            avisos.append(f"mudei agora, mas não consegui gravar o config.json ({e}).")
+    for aviso in avisos:
+        print(f"*** {aviso}")
+    return avisos
 
 
 def aplicar_config(config: dict) -> list:
@@ -426,9 +446,13 @@ ultimo_comando = {}     # unique_id -> horário do último comando (anti-spam)
 
 COMANDOS_PUBLICOS = ["np", "pp", "rank", "recorde", "pedir", "pedidos", "apelido", "mensagens",
                      "top", "copiar"]
-COMANDOS_MOD = ["mudo", "voltar", "limpar", "velocidade", "volume", "nomes", "bloquear",
-                "proximo", "fecharpedidos", "abrirpedidos", "zerarpedidos"]
+COMANDOS_MOD = ["mudo", "voltar", "limpar", "velocidade", "volume", "voz", "nomes", "bloquear",
+                "desbloquear", "ligar", "desligar", "avisos", "espera", "tamanho", "fila",
+                "proximo", "fecharpedidos", "abrirpedidos", "zerarpedidos", "limitepedidos"]
+COMANDOS_DONO = ["mod", "desmod"]  # só você: se um mod pudesse criar mods, qualquer um daria acesso a qualquer um
 APELIDOS_COMANDO = {"ajuda": "comandos", "mapa": "np", "próximo": "proximo"}
+TODOS_COMANDOS = ["comandos"] + COMANDOS_PUBLICOS + COMANDOS_MOD + COMANDOS_DONO
+PROTEGIDOS = ("ligar", "desligar")  # se desligar estes pelo chat, não daria para religar pelo chat
 
 
 def desativado(cmd: str) -> bool:
@@ -436,7 +460,22 @@ def desativado(cmd: str) -> bool:
 
 
 FALADO = {"proximo": "próximo", "fecharpedidos": "fechar pedidos", "abrirpedidos": "abrir pedidos",
-          "zerarpedidos": "zerar pedidos"}  # como a voz fala o nome de cada comando
+          "zerarpedidos": "zerar pedidos", "limitepedidos": "limite pedidos"}  # como a voz fala cada comando
+
+# !voz francisca -> nome da voz no config
+VOZES = {"francisca": "pt-BR-FranciscaNeural", "thalita": "pt-BR-ThalitaMultilingualNeural",
+         "antonio": "pt-BR-AntonioNeural", "antônio": "pt-BR-AntonioNeural", "raquel": "pt-PT-RaquelNeural",
+         "duarte": "pt-PT-DuarteNeural", "maria": "windows", "windows": "windows"}
+
+# comandos que mudam um número: comando -> (opção do config, o que a voz responde)
+NUMERICOS = {
+    "velocidade": ("velocidade", "Velocidade {}."),
+    "volume": ("volume", "Volume {}."),
+    "espera": ("espera_comando", "Agora cada pessoa espera {} segundos entre um comando e outro."),
+    "tamanho": ("tamanho_maximo", "Vou ler até {} letras de cada mensagem."),
+    "fila": ("fila_maxima", "A fila de fala agora guarda até {} mensagens."),
+    "limitepedidos": ("pedidos_maximos", "A fila de pedidos agora aceita até {}."),
+}
 
 
 def ajuda(lista, titulo: str) -> str:
@@ -449,7 +488,7 @@ def ajuda(lista, titulo: str) -> str:
 
 def tratar_comando(user, nome: str, texto: str, dono: str) -> bool:
     """Executa um comando do chat. Retorna True se era um comando (e não deve ser lido)."""
-    global pausado, VELOCIDADE, VOLUME, LER_NOME, pedidos_abertos
+    global pausado, pedidos_abertos
     if not texto.startswith(PREFIXO):
         return False
     partes = texto[len(PREFIXO):].split(maxsplit=1)
@@ -458,11 +497,30 @@ def tratar_comando(user, nome: str, texto: str, dono: str) -> bool:
     cmd = partes[0].lower()
     arg = partes[1].strip() if len(partes) > 1 else ""
     uid = (user.unique_id or "").lower()
-    if cmd in ("fechar", "abrir", "zerar") and arg.lower() == "pedidos":
-        cmd, arg = cmd + "pedidos", ""  # aceita "!fechar pedidos" com espaço
+    if cmd in ("fechar", "abrir", "zerar", "limite") and arg.lower() == "pedidos" or \
+            cmd == "limite" and arg.lower().startswith("pedidos "):
+        cmd, arg = cmd + "pedidos", arg[len("pedidos"):].strip()  # aceita "!fechar pedidos" com espaço
     if desativado(cmd):
         return True  # comando desligado em COMANDOS_DESATIVADOS: ignora calado
-    eh_mod = uid == dono.lower() or uid in [m.lstrip("@").lower() for m in MODERADORES]
+    eh_dono = uid == dono.lower()
+    eh_mod = eh_dono or uid in [m.lstrip("@").lower() for m in MODERADORES]
+
+    # --- só você (o dono da live) ---
+    if eh_dono and cmd in ("mod", "desmod"):
+        alvo = arg.lstrip("@").lower()
+        if not alvo or " " in alvo:
+            falar(f"Use: exclamação {cmd} e o usuário do TikTok, sem arroba.")
+            return True
+        mods = [m for m in MODERADORES if m.lstrip("@").lower() != alvo]
+        if cmd == "mod":
+            mudar_config({"moderadores": mods + [alvo]})
+            falar(f"{alvo} agora é moderador.")
+        elif len(mods) == len(MODERADORES):
+            falar(f"{alvo} não estava na lista de moderadores.")
+        else:
+            mudar_config({"moderadores": mods})
+            falar(f"{alvo} não é mais moderador.")
+        return True
 
     # --- moderação (só você e os MODERADORES) ---
     if eh_mod:
@@ -479,26 +537,70 @@ def tratar_comando(user, nome: str, texto: str, dono: str) -> bool:
             limpar_fila()
             print("[fila de fala limpa]")
             return True
-        if cmd in ("velocidade", "volume"):
+        if cmd in NUMERICOS:
+            chave, resposta = NUMERICOS[cmd]
             try:
                 n = int(arg)
             except ValueError:
-                falar(f"Use: exclamação {cmd} e um número.")
+                falar(f"Use: exclamação {FALADO.get(cmd, cmd)} e um número.")
                 return True
-            if cmd == "velocidade":
-                VELOCIDADE = max(-10, min(10, n))
-                falar(f"Velocidade {VELOCIDADE}.")
-            else:
-                VOLUME = max(0, min(100, n))
-                falar(f"Volume {VOLUME}.")
+            mudar_config({chave: n})  # fora do limite, usa o limite mais próximo
+            falar(resposta.format(globals()[OPCOES[chave]]))
+            return True
+        if cmd == "voz":
+            voz = VOZES.get(arg.lower()) or next((v for v in VOZES.values() if v.lower() == arg.lower()), None)
+            if not voz:
+                falar("Vozes: Francisca, Thalita, Antonio, Raquel, Duarte e Maria, que funciona sem internet. "
+                      "Use: exclamação voz e o nome.")
+                return True
+            mudar_config({"voz": voz})
+            falar("Voz trocada.")
             return True
         if cmd == "nomes":
-            LER_NOME = not LER_NOME
+            mudar_config({"ler_nome": not LER_NOME})
             falar("Vou ler os nomes." if LER_NOME else "Não vou mais ler os nomes.")
             return True
-        if cmd == "bloquear" and arg:
-            PALAVRAS_BLOQUEADAS.append(arg.lower())
-            print(f"[palavra bloqueada: {arg}]")
+        if cmd in ("bloquear", "desbloquear"):
+            palavra = arg.lower()
+            if not palavra:
+                falar(f"Use: exclamação {cmd} e a palavra.")
+                return True
+            outras = [p for p in PALAVRAS_BLOQUEADAS if p.lower() != palavra]
+            if cmd == "bloquear":
+                mudar_config({"palavras_bloqueadas": outras + [palavra]})
+                print(f"[palavra bloqueada: {arg}]")  # não fala a palavra, ela pode ser um palavrão
+            elif len(outras) == len(PALAVRAS_BLOQUEADAS):
+                falar("Essa palavra não estava bloqueada.")
+            else:
+                mudar_config({"palavras_bloqueadas": outras})
+                print(f"[palavra desbloqueada: {arg}]")
+                falar("Palavra desbloqueada.")
+            return True
+        if cmd in ("ligar", "desligar"):
+            alvo = arg.lstrip(PREFIXO).lower()
+            alvo = APELIDOS_COMANDO.get(alvo, alvo)
+            if alvo not in TODOS_COMANDOS:
+                falar(f"Use: exclamação {cmd} e o nome de um comando, sem a exclamação.")
+                return True
+            if alvo in PROTEGIDOS:
+                falar(f"O {alvo} não pode ser desligado pelo chat.")
+                return True
+            outros = [c for c in COMANDOS_DESATIVADOS
+                      if APELIDOS_COMANDO.get(c.lstrip(PREFIXO).lower(), c.lstrip(PREFIXO).lower()) != alvo]
+            mudar_config({"comandos_desativados": outros + ([alvo] if cmd == "desligar" else [])})
+            falado = FALADO.get(alvo, alvo)
+            falar(f"Comando {falado} desligado." if cmd == "desligar" else f"Comando {falado} ligado.")
+            return True
+        if cmd == "avisos":
+            qual = {"mapa": "avisar_mapa", "recorde": "avisar_recorde"}.get(arg.lower())
+            if not qual:
+                falar(f"Aviso de mapa {'ligado' if AVISAR_MAPA else 'desligado'}, aviso de recorde "
+                      f"{'ligado' if AVISAR_RECORDE else 'desligado'}. "
+                      "Use: exclamação avisos mapa, ou exclamação avisos recorde, para ligar ou desligar.")
+                return True
+            mudar_config({qual: not globals()[OPCOES[qual]]})
+            ligado = globals()[OPCOES[qual]]
+            falar(f"Aviso de {arg.lower()} {'ligado' if ligado else 'desligado'}.")
             return True
         if cmd in ("proximo", "próximo"):
             if not pedidos:
@@ -520,8 +622,7 @@ def tratar_comando(user, nome: str, texto: str, dono: str) -> bool:
             falar("Fila de pedidos zerada.")
             return True
 
-    if cmd in ("mudo", "voltar", "limpar", "velocidade", "volume", "nomes", "bloquear",
-               "proximo", "próximo", "fecharpedidos", "abrirpedidos", "zerarpedidos"):
+    if cmd in COMANDOS_MOD or cmd in COMANDOS_DONO or cmd == "próximo":
         return True  # comando de moderação vindo de quem não pode: ignora calado
 
     # --- comandos de todo mundo ---
@@ -536,7 +637,8 @@ def tratar_comando(user, nome: str, texto: str, dono: str) -> bool:
         return True
 
     if cmd in ("comandos", "ajuda"):
-        falar(ajuda(COMANDOS_MOD, "Comandos de moderação") if eh_mod else ajuda(COMANDOS_PUBLICOS, "Comandos"))
+        falar(ajuda(COMANDOS_MOD + (COMANDOS_DONO if eh_dono else []), "Comandos de moderação") if eh_mod
+              else ajuda(COMANDOS_PUBLICOS, "Comandos"))
     elif cmd == "apelido":
         apelido = limpar(arg)[:30]
         if not apelido:
@@ -650,7 +752,7 @@ class PaginaConfig(http.server.BaseHTTPRequestHandler):
                        json.dumps(dados, ensure_ascii=False).encode("utf-8"))
 
     def dados_da_pagina(self) -> dict:
-        return {"config": config_atual(), "comandos": ["comandos"] + COMANDOS_PUBLICOS + COMANDOS_MOD,
+        return {"config": config_atual(), "comandos": TODOS_COMANDOS,
                 "apelidos": APELIDOS_COMANDO}
 
     def do_GET(self):
@@ -674,14 +776,8 @@ class PaginaConfig(http.server.BaseHTTPRequestHandler):
                 raise ValueError
         except (ValueError, UnicodeDecodeError):
             return self.responder_json({"erro": "dados inválidos"}, 400)
-        avisos = aplicar_config(dados)
-        try:
-            salvar_config()
-        except OSError as e:
-            avisos.append(f"mudei agora, mas não consegui gravar o config.json ({e}).")
         print("[configurações alteradas pela página]")
-        for aviso in avisos:
-            print(f"*** {aviso}")
+        avisos = mudar_config(dados)
         self.responder_json({"avisos": avisos, **self.dados_da_pagina()})
 
 

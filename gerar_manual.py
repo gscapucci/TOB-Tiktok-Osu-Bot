@@ -276,24 +276,52 @@ s.append(caixa("Sobre o !copiar", "Qualquer pessoa pode usar, então alguém pod
 s += [PageBreak(), p("5. Comandos de moderação", h1),
       p("Só funcionam para <b>você</b> (o dono da live) e para quem estiver na lista de moderadores. "
         "Se outra pessoa tentar, o comando é ignorado em silêncio.", sub)]
+s.append(p("Controlando a live", h2))
 s.append(tabela(["Comando", "O que faz"], [
     [cmd("!mudo"), "Para de ler o chat. Os avisos automáticos do osu! também param."],
     [cmd("!voltar"), "Volta a ler o chat."],
     [cmd("!limpar"), "Apaga as mensagens que estavam esperando para serem lidas."],
-    [cmd("!velocidade 5"), "Muda a velocidade da voz, de -10 (lenta) a 10 (rápida)."],
-    [cmd("!volume 70"), "Muda o volume, de 0 a 100."],
-    [cmd("!nomes"), "Liga ou desliga o “Fulano disse:” antes das mensagens."],
-    [cmd("!bloquear palavra"), "Mensagens com essa palavra deixam de ser lidas."],
     [cmd("!proximo"), "Abre o próximo pedido de mapa (seção 6)."],
     [cmd("!fecharpedidos"), "Para de aceitar pedidos."],
     [cmd("!abrirpedidos"), "Volta a aceitar pedidos."],
     [cmd("!zerarpedidos"), "Apaga a fila de pedidos inteira."],
 ], [42, 128]))
-s.append(dica("O que esses comandos mudam vale <b>só até fechar o programa</b>. Para mudar de vez, "
-              "use a página de configurações (seção 8)."))
-s.append(p("Como adicionar moderadores", h2))
-s.append(p("O jeito mais fácil é pela página de configurações (seção 8): escreva os usuários do TikTok, "
-           "sem o @, um por linha, no campo <b>Moderadores</b> e clique em <b>Salvar</b>. Vale na hora."))
+s.append(Spacer(1, 4))
+s.append(p("Estes valem até fechar o programa."))
+s.append(p("Mudando as configurações", h2))
+s.append(p("Estes ficam <b>gravados no config.json</b>, como se você tivesse mudado pela página de "
+           "configurações. Assim os moderadores conseguem ajustar tudo de qualquer lugar, só pelo chat."))
+s.append(tabela(["Comando", "O que faz"], [
+    [cmd("!voz antonio"), "Troca a voz: francisca, thalita, antonio, raquel, duarte ou maria (do Windows, "
+                          f"funciona sem internet). Só {cmd('!voz')} fala a lista."],
+    [cmd("!velocidade 5"), "Muda a velocidade da voz, de -10 (lenta) a 10 (rápida)."],
+    [cmd("!volume 70"), "Muda o volume, de 0 a 100."],
+    [cmd("!nomes"), "Liga ou desliga o “Fulano disse:” antes das mensagens."],
+    [cmd("!bloquear palavra"), "Mensagens com essa palavra deixam de ser lidas. A voz não repete a palavra."],
+    [cmd("!desbloquear palavra"), "Volta a ler mensagens com essa palavra."],
+    [cmd("!desligar copiar"), f"Desliga um comando (o nome vai sem o !). {cmd('!ligar copiar')} liga de novo."],
+    [cmd("!avisos mapa"), f"Liga ou desliga o aviso de mapa novo. {cmd('!avisos recorde')} faz o mesmo com o "
+                          f"aviso de recorde. Só {cmd('!avisos')} fala como estão."],
+    [cmd("!espera 10"), "Segundos que cada pessoa espera entre um comando e outro."],
+    [cmd("!tamanho 150"), "Quantas letras de cada mensagem são lidas."],
+    [cmd("!fila 10"), "Quantas mensagens podem ficar esperando a voz."],
+    [cmd("!limitepedidos 20"), "Quantos pedidos cabem na fila."],
+], [42, 128]))
+s.append(dica(f"Valores fora da faixa usam o limite mais próximo: {cmd('!volume 150')} vira volume 100. "
+              f"O {cmd('!ligar')} e o {cmd('!desligar')} não podem ser desligados pelo chat, senão não "
+              "daria para religar."))
+s.append(p("Só para você", h2))
+s.append(tabela(["Comando", "O que faz"], [
+    [cmd("!mod usuario"), "Torna alguém moderador (usuário do TikTok, sem o @)."],
+    [cmd("!desmod usuario"), "Tira alguém dos moderadores."],
+], [42, 128]))
+s.append(Spacer(1, 4))
+s.append(p("Os moderadores não podem criar outros moderadores: assim, se um deles fizer besteira, não "
+           "consegue dar acesso a mais ninguém. O prefixo, o endereço do tosu e as opções da página também "
+           "não mudam pelo chat, porque um erro de digitação no meio da live quebraria os comandos."))
+s.append(p("Outros jeitos de adicionar moderadores", h2))
+s.append(p("Pela página de configurações (seção 8): escreva os usuários do TikTok, sem o @, um por linha, "
+           "no campo <b>Moderadores</b> e clique em <b>Salvar</b>. Vale na hora."))
 s.append(p("Ou abra o <b>config.json</b> com o Bloco de Notas, procure a linha <b>moderadores</b> e "
            "coloque os usuários, entre aspas:"))
 s.append(p('<font name="Mono">"moderadores": ["usuario1", "usuario2"],</font>',
@@ -320,7 +348,7 @@ s.append(passos([
 s.append(p("Regras da fila", h2))
 s += itens([
     "Cada pessoa pode ter <b>um pedido por vez</b> na fila.",
-    "A fila aceita até <b>30 pedidos</b>.",
+    f"A fila aceita até <b>30 pedidos</b>. Você ou um moderador pode mudar com {cmd('!limitepedidos 20')}.",
     "A fila aparece no arquivo <b>pedidos.txt</b>, atualizado na hora. Dá para deixar aberto durante a live.",
     "A fila <b>zera</b> quando o programa é fechado.",
 ])
@@ -354,8 +382,8 @@ s.append(dica("Para conferir se o tosu está funcionando, abra <b>http://127.0.0
 
 # ---------- 8 ----------
 s += [PageBreak(), p("8. Ligando e desligando funções", h1),
-      p("Existem três jeitos: pelo chat, durante a live (vale até fechar o programa); pela página de "
-        "configurações (vale na hora e para sempre); ou editando o config.json à mão.", sub)]
+      p("Existem três jeitos: pelo chat, durante a live (seção 5); pela página de configurações; ou "
+        "editando o config.json à mão. Os dois primeiros valem na hora e ficam gravados.", sub)]
 s.append(p("Pela página de configurações (o jeito mais fácil)", h2))
 s.append(passos([
     ("Abra o LeitorChat", "A página só funciona com o programa aberto, ao vivo ou no modo de teste (seção 3)."),
@@ -393,21 +421,24 @@ s.append(Spacer(1, 4))
 s.append(atencao("Se o arquivo tiver algum erro de digitação, o programa avisa <b>a linha do problema</b> "
                  "ao abrir e usa as configurações padrão, sem fechar. Se apagar o config.json, ele cria um novo."))
 s.append(p("Resumo", h2))
-s.append(p("Tudo o que está na coluna “No config.json” também pode ser mudado pela página de configurações."))
+s.append(p("Tudo o que está na coluna “No config.json” também pode ser mudado pela página de configurações. "
+           "Os comandos de chat que mudam uma configuração também gravam no config.json."))
 s.append(tabela(["Função", "Durante a live", "No config.json"], [
     ["Ler o chat", f"{cmd('!mudo')} / {cmd('!voltar')}", "—"],
     ["“Fulano disse:”", cmd("!nomes"), '"ler_nome": true / false'],
     ["Velocidade da voz", cmd("!velocidade 5"), '"velocidade": 5'],
     ["Volume", cmd("!volume 70"), '"volume": 70'],
-    ["Palavras bloqueadas", cmd("!bloquear palavra"), '"palavras_bloqueadas": ["palavra"]'],
-    ["Qualquer comando", "—", '"comandos_desativados": ["copiar"]'],
+    ["Palavras bloqueadas", f"{cmd('!bloquear')} / {cmd('!desbloquear')}", '"palavras_bloqueadas": ["palavra"]'],
+    ["Qualquer comando", f"{cmd('!desligar')} / {cmd('!ligar')}", '"comandos_desativados": ["copiar"]'],
     ["Aceitar pedidos", f"{cmd('!fecharpedidos')} / {cmd('!abrirpedidos')}", "—"],
-    ["Aviso de mapa novo", f"{cmd('!mudo')} silencia", '"avisar_mapa": true / false'],
-    ["Aviso de recorde", f"{cmd('!mudo')} silencia", '"avisar_recorde": true / false'],
-    ["Moderadores", "—", '"moderadores": ["usuario"]'],
-    ["Tempo entre comandos", "—", '"espera_comando": 15'],
-    ["Tamanho da fila de pedidos", "—", '"pedidos_maximos": 30'],
-    ["Voz", "—", '"voz": "pt-BR-FranciscaNeural"'],
+    ["Aviso de mapa novo", cmd("!avisos mapa"), '"avisar_mapa": true / false'],
+    ["Aviso de recorde", cmd("!avisos recorde"), '"avisar_recorde": true / false'],
+    ["Moderadores", f"{cmd('!mod')} / {cmd('!desmod')} (só você)", '"moderadores": ["usuario"]'],
+    ["Tempo entre comandos", cmd("!espera 15"), '"espera_comando": 15'],
+    ["Tamanho das mensagens", cmd("!tamanho 200"), '"tamanho_maximo": 200'],
+    ["Fila de fala", cmd("!fila 15"), '"fila_maxima": 15'],
+    ["Tamanho da fila de pedidos", cmd("!limitepedidos 30"), '"pedidos_maximos": 30'],
+    ["Voz", cmd("!voz francisca"), '"voz": "pt-BR-FranciscaNeural"'],
     ["Página no celular", "—", '"web_rede_local": true / false'],
 ], [45, 50, 75]))
 

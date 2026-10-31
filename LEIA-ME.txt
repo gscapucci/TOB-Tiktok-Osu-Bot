@@ -31,7 +31,10 @@ ALGUNS COMANDOS DO CHAT
   !pp         quanto PP o mapa vale com os mods atuais
   !rank       seu rank no osu!
   !pedir      o chat pede um mapa do osu!
-  !mudo       (só você) para de ler o chat; !voltar volta a ler
+  !mudo       (você e mods) para de ler o chat; !voltar volta a ler
+  !volume 70  (você e mods) também: !voz, !velocidade, !bloquear,
+              !desligar <comando>, !avisos mapa... ficam gravados
+  !mod fulano (só você) torna alguém moderador
 
 
 CONFIGURAÇÕES

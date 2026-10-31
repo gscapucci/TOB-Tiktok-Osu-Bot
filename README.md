@@ -65,10 +65,14 @@ marque a opção **"Add python.exe to PATH"** na instalação.
 
 Existem **quatro jeitos**, dependendo do que você quer mudar:
 
-### A) Durante a live, pelo chat (vale só até fechar o programa)
+### A) Durante a live, pelo chat (vale na hora)
 
-Você (ou um moderador) digita no chat do TikTok, por exemplo `!mudo`, `!nomes`,
-`!fecharpedidos`. Veja a [seção 5](#5-comandos-de-moderação).
+Você (ou um moderador) digita no chat do TikTok, por exemplo `!volume 70`,
+`!voz antonio`, `!desligar copiar`. Os comandos que mudam uma configuração
+ficam gravados no `config.json`; os de controle da live (`!mudo`,
+`!fecharpedidos`...) valem até fechar o programa. Veja a
+[seção 5](#5-comandos-de-moderação). É o jeito de os moderadores mexerem de
+qualquer lugar, sem precisar de nada instalado.
 
 ### B) Pela página de configurações (vale na hora e para sempre)
 
@@ -149,8 +153,8 @@ Tratamentos automáticos:
 | `fila_maxima` | Quantas mensagens podem ficar esperando para serem lidas | `15` |
 | `palavras_bloqueadas` | Mensagens com essas palavras não são lidas. Ex.: `["spam", "feio"]` | `[]` |
 
-**Durante a live:** `!mudo` / `!voltar`, `!velocidade`, `!volume`, `!nomes`,
-`!bloquear` (veja a [seção 5](#5-comandos-de-moderação)).
+**Durante a live:** `!mudo` / `!voltar`, `!voz`, `!velocidade`, `!volume`, `!nomes`,
+`!bloquear` / `!desbloquear`, `!tamanho`, `!fila` (veja a [seção 5](#5-comandos-de-moderação)).
 
 ### Apelidos
 
@@ -207,30 +211,54 @@ você está copiando outra coisa. Se atrapalhar, desligue com
 ## 5. Comandos de moderação
 
 Só funcionam para **você** (o dono da live) e para quem estiver na lista
-`moderadores` do `config.json` (usuários do TikTok, sem @). Se outra pessoa
-tentar, é ignorado em silêncio.
+`moderadores` (usuários do TikTok, sem @). Se outra pessoa tentar, é ignorado
+em silêncio. Para pôr alguém na lista, use `!mod usuario` no chat, a página de
+configurações ou o `config.json`:
 
 ```json
 "moderadores": ["usuario1", "usuario2"]
 ```
 
-Tudo o que esses comandos mudam vale **só até fechar o programa**. Para mudar
-de vez, altere a configuração correspondente no `config.json`.
+Os comandos que mudam uma configuração (coluna da direita) ficam **gravados no
+`config.json`**, como se você tivesse mudado pela página. Os outros controlam a
+live e valem até fechar o programa.
 
-| Comando | O que faz | Configuração fixa equivalente |
+| Comando | O que faz | Configuração que muda |
 |---|---|---|
 | `!mudo` | Para de ler o chat (e apaga o que estava esperando). Os avisos automáticos também param. | — |
 | `!voltar` | Volta a ler o chat | — |
 | `!limpar` | Apaga as mensagens que estavam esperando para serem lidas | — |
+| `!voz antonio` | Troca a voz: `francisca`, `thalita`, `antonio`, `raquel`, `duarte` ou `maria` (do Windows, sem internet). Sem nome, fala a lista. | `voz` |
 | `!velocidade 5` | Muda a velocidade da voz (-10 a 10) | `velocidade` |
 | `!volume 70` | Muda o volume (0 a 100) | `volume` |
 | `!nomes` | Liga/desliga o "Fulano disse:" | `ler_nome` |
-| `!bloquear palavra` | Bloqueia uma palavra | `palavras_bloqueadas` |
+| `!bloquear palavra` | Bloqueia uma palavra (a voz não repete a palavra, só aparece na janela) | `palavras_bloqueadas` |
+| `!desbloquear palavra` | Desbloqueia uma palavra | `palavras_bloqueadas` |
+| `!desligar copiar` / `!ligar copiar` | Desliga / religa um comando (nome sem o `!`). O `!ligar` e o `!desligar` não podem ser desligados pelo chat. | `comandos_desativados` |
+| `!avisos mapa` / `!avisos recorde` | Liga/desliga o aviso de mapa novo ou de recorde. Só `!avisos` fala como estão. | `avisar_mapa` / `avisar_recorde` |
+| `!espera 10` | Segundos que cada pessoa espera entre comandos (anti-spam) | `espera_comando` |
+| `!tamanho 150` | Quantas letras de cada mensagem são lidas | `tamanho_maximo` |
+| `!fila 10` | Quantas mensagens podem ficar esperando a voz | `fila_maxima` |
 | `!proximo` | Abre o próximo pedido de mapa — [seção 6](#6-pedidos-de-mapas-do-osu) | — |
 | `!fecharpedidos` / `!abrirpedidos` | Para / volta a aceitar pedidos | — |
 | `!zerarpedidos` | Apaga a fila de pedidos | — |
+| `!limitepedidos 20` | Tamanho máximo da fila de pedidos (também aceita `!limite pedidos 20`) | `pedidos_maximos` |
 
-Esses comandos também podem ser desligados em `comandos_desativados`.
+**Só você** (o dono da live):
+
+| Comando | O que faz | Configuração que muda |
+|---|---|---|
+| `!mod usuario` | Torna alguém moderador | `moderadores` |
+| `!desmod usuario` | Tira alguém dos moderadores | `moderadores` |
+
+Os moderadores não podem criar outros moderadores: assim, se um deles fizer
+besteira, ele não consegue dar acesso a mais ninguém.
+
+Pelo chat **não** dá para mudar `prefixo`, `tosu_url`, `web_porta` e
+`web_rede_local`: um erro de digitação no meio da live quebraria os comandos ou
+a conexão com o osu!. Essas ficam na página de configurações e no `config.json`.
+
+Todos esses comandos também podem ser desligados em `comandos_desativados`.
 
 ---
 
@@ -246,6 +274,7 @@ O chat pede mapas, eles entram numa fila e você abre um de cada vez.
 | `!proximo` | Você/mods | Abre o próximo no navegador e fala de quem é |
 | `!fecharpedidos` / `!abrirpedidos` | Você/mods | Para / volta a aceitar pedidos (também aceita `!fechar pedidos`) |
 | `!zerarpedidos` | Você/mods | Apaga a fila inteira |
+| `!limitepedidos 20` | Você/mods | Muda o tamanho máximo da fila (fica gravado) |
 
 - Pedido com **link** abre a página do mapa; pedido com **nome** abre a busca do site do osu!.
 - No **lazer**: baixe o mapa no site (logado) e dê dois cliques no `.osz`.
@@ -287,7 +316,7 @@ músicas, o próximo `!pp` já usa os novos.
 | Mapa novo | Quando você **começa a jogar** um mapa diferente do anterior (não fala enquanto você só navega pela lista) | "Agora: Artista - Música, dificuldade X, 5,6 estrelas." | `avisar_mapa` |
 | Recorde da live | Quando você **passa** um mapa com mais PP que qualquer jogada anterior da live (fail não conta) | "Novo recorde da live! 513 PP em Chronostasis, com HD DT." | `avisar_recorde` |
 
-- Para desligar: `"avisar_mapa": false` e/ou `"avisar_recorde": false`.
+- Para desligar: `!avisos mapa` / `!avisos recorde` no chat, ou `"avisar_mapa": false` e/ou `"avisar_recorde": false`.
 - Durante a live, o `!mudo` também silencia os avisos.
 - O recorde **começa do zero** cada vez que o programa é aberto.
 
@@ -314,21 +343,28 @@ Todos ficam na mesma pasta do programa.
 
 ## 9. Tabela-resumo: liga/desliga
 
+Tudo o que está na coluna `config.json` também muda pela página de
+configurações. Os comandos de chat que mudam uma configuração gravam no
+`config.json`.
+
 | Funcionalidade | Durante a live (chat) | Fixo (`config.json`) |
 |---|---|---|
 | Ler o chat | `!mudo` / `!voltar` | — |
 | Falar "Fulano disse:" | `!nomes` | `"ler_nome": true/false` |
+| Voz | `!voz nome` | `"voz": "..."` |
 | Velocidade da voz | `!velocidade N` | `"velocidade": N` |
 | Volume | `!volume N` | `"volume": N` |
-| Palavras bloqueadas | `!bloquear palavra` | `"palavras_bloqueadas": [...]` |
-| Qualquer comando | — | `"comandos_desativados": ["nome"]` |
+| Palavras bloqueadas | `!bloquear` / `!desbloquear palavra` | `"palavras_bloqueadas": [...]` |
+| Qualquer comando | `!desligar` / `!ligar nome` | `"comandos_desativados": ["nome"]` |
 | Aceitar pedidos | `!fecharpedidos` / `!abrirpedidos` | — |
-| Aviso de mapa novo | `!mudo` (silencia tudo) | `"avisar_mapa": true/false` |
-| Aviso de recorde | `!mudo` (silencia tudo) | `"avisar_recorde": true/false` |
-| Quem é moderador | — | `"moderadores": ["usuario"]` |
-| Tempo anti-spam | — | `"espera_comando": N` |
-| Tamanho da fila de pedidos | — | `"pedidos_maximos": N` |
-| Voz | — | `"voz": "..."` |
+| Aviso de mapa novo | `!avisos mapa` | `"avisar_mapa": true/false` |
+| Aviso de recorde | `!avisos recorde` | `"avisar_recorde": true/false` |
+| Quem é moderador | `!mod` / `!desmod usuario` (só você) | `"moderadores": ["usuario"]` |
+| Tempo anti-spam | `!espera N` | `"espera_comando": N` |
+| Tamanho das mensagens lidas | `!tamanho N` | `"tamanho_maximo": N` |
+| Fila de fala | `!fila N` | `"fila_maxima": N` |
+| Tamanho da fila de pedidos | `!limitepedidos N` | `"pedidos_maximos": N` |
+| Prefixo, tosu, página | — | `"prefixo"`, `"tosu_url"`, `"web_porta"`, `"web_rede_local"` |
 
 ---
 
