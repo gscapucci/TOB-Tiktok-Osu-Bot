@@ -428,8 +428,9 @@ def abrir_tosu():
         print("[tosu não encontrado na pasta tosu: os comandos do osu! não vão responder]")
         return
     try:
+        # em bytes: a resposta vem acentuada ("INFORMAÇÕES: ...") numa codificação que muda de PC para PC
         lista = subprocess.run(["tasklist", "/fi", "imagename eq tosu.exe", "/fo", "csv", "/nh"],
-                               capture_output=True, text=True, timeout=10).stdout
+                               capture_output=True, timeout=10).stdout.decode("ascii", "ignore")
     except (OSError, subprocess.SubprocessError):
         lista = ""
     if "tosu.exe" in lista.lower():
