@@ -42,7 +42,7 @@ import json
 import urllib.parse
 import urllib.request
 import webbrowser
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 
 from TikTokLive import TikTokLiveClient
 from TikTokLive.events import CommentEvent, ConnectEvent, DisconnectEvent, JoinEvent
@@ -397,6 +397,7 @@ def salvar_pedidos():
 osu = None              # últimos dados do tosu (None = tosu fechado)
 JOGANDO = 2             # número do estado "play" no tosu
 recorde = None          # melhor jogada da live: {"pp", "mapa", "mods"}
+INICIO = datetime.now(timezone.utc)  # scores de antes disto não contam para o recorde
 
 
 def numero(n, casas=0) -> str:
@@ -417,24 +418,42 @@ def separar_mods(mods: str) -> str:
     return " ".join(mods[i:i + 2] for i in range(0, len(mods), 2))
 
 
+def score_desta_live(criado) -> bool:
+    """Se o score foi feito depois que o programa abriu (um score antigo do ranking também abre a
+    tela de resultado). Data que não dá para ler conta como desta live, para o recorde não parar."""
+    try:
+        data = datetime.fromisoformat(str(criado).replace("Z", "+00:00"))
+    except ValueError:
+        return True
+    if data.tzinfo is None:
+        data = data.astimezone()  # sem fuso: hora do computador
+    return data >= INICIO - timedelta(minutes=1)  # folga para o relógio do servidor do osu!
+
+
 def vigia_osu():
     """Thread que lê o tosu a cada 2 segundos: avisa mapa novo e recorde de PP da live."""
     global osu, recorde
     ultimo_mapa = None
+    jogado = None           # id do último mapa jogado, até o resultado dele ser contado
     ultimo_resultado = None
     while True:
         try:
             with urllib.request.urlopen(TOSU_URL, timeout=2) as r:
                 osu = json.loads(r.read().decode("utf-8"))
             res = osu["resultsScreen"]
+            if osu["state"]["number"] == JOGANDO:
+                jogado = osu["beatmap"]["id"]
             # sem o id do mapa na chave: se você troca de mapa ainda na tela de resultado, o tosu
             # recalcula o PP do resultado antigo no mapa novo, e isso não pode virar recorde
             chave = (res["score"], res["createdAt"])
-            # a tela de resultado só aparece quando você passa o mapa (fail não conta)
-            if "result" in osu["state"]["name"].lower() and res["score"] and chave != ultimo_resultado:
+            # a tela de resultado só aparece quando você passa o mapa (fail não conta). Só vale a do
+            # mapa que você acabou de jogar: trocou de mapa antes do PP aparecer, o PP já é do outro
+            if "result" in osu["state"]["name"].lower() and res["score"] and chave != ultimo_resultado \
+                    and osu["beatmap"]["id"] == jogado and score_desta_live(res["createdAt"]):
                 pp = res["pp"]["current"]
                 if pp > 0:
                     ultimo_resultado = chave  # só depois que o tosu calculou o PP
+                    jogado = None
                 if pp > 0 and (recorde is None or pp > recorde["pp"]):
                     recorde = {"pp": pp, "mapa": osu["beatmap"]["title"], "mods": res["mods"]["name"]}
                     com = f", com {separar_mods(recorde['mods'])}" if recorde["mods"] else ""
