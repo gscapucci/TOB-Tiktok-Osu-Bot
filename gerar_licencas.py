@@ -1,5 +1,5 @@
 """
-Gera a pasta "dist\licencas" com as licenças de tudo o que vai no zip de distribuição:
+Gera a pasta "licencas" dentro de "dist" com as licenças de tudo o que vai no zip de distribuição:
 as bibliotecas empacotadas no LeitorChat.exe, o próprio Python e o tosu.
 
 Uso:
