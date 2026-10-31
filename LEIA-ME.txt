@@ -60,6 +60,7 @@ COMANDOS DO CHAT
   !abrirpedidos          volta a aceitar pedidos (!abrir)
   !zerarpedidos          apaga a fila de pedidos (!zerar)
   !limitepedidos <número>   quantos pedidos cabem na fila (!limite)
+  !filapedidos           liga/desliga a fila: desligada, cada pedido vai direto para o osu!
 
   Só você:
   !mod <usuário>         torna alguém moderador

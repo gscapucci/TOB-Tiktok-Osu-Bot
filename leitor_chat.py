@@ -19,6 +19,7 @@ Pedidos de mapas do osu! (a fila fica salva em pedidos.txt):
     Todo mundo:  !pedir <link ou nome do mapa>  !pedidos
     Você e MODERADORES:  !proximo (abre no navegador)  !fecharpedidos
                          !abrirpedidos  !zerarpedidos  !limitepedidos <número>
+                         !filapedidos (liga/desliga a fila: desligada, cada pedido vai direto para o osu!)
 
 osu! (o tosu abre sozinho, se estiver na pasta tosu):  !np (mapa atual)  !pp  !rank  !recorde
     e avisos automáticos de mapa novo (AVISAR_MAPA) e de recorde de PP da live (AVISAR_RECORDE)
@@ -71,6 +72,7 @@ PREFIXO = "!"
 MODERADORES = []        # usuários (sem @) que podem usar os comandos de moderação, além de você
 ESPERA_COMANDO = 15     # segundos que cada pessoa espera entre um comando e outro
 PEDIDOS_MAXIMOS = 30    # tamanho máximo da fila de pedidos de mapas do osu!
+FILA_PEDIDOS = True     # False: cada !pedir vai direto para o seu chat do osu!, sem fila e sem a voz anunciar
 COMANDOS_DESATIVADOS = []  # comandos desligados, sem o "!". ex.: ["copiar", "top"]
 
 # osu! (precisa do tosu aberto junto com o jogo)
@@ -98,7 +100,7 @@ ARQUIVO_CONFIG = os.path.join(PASTA, "config.json")
 # nome no config.json -> variável aqui do programa
 OPCOES = {nome.lower(): nome for nome in (
     "VOZ", "VELOCIDADE", "VOLUME", "LER_NOME", "TAMANHO_MAXIMO", "FILA_MAXIMA", "PALAVRAS_BLOQUEADAS",
-    "PREFIXO", "MODERADORES", "ESPERA_COMANDO", "PEDIDOS_MAXIMOS", "COMANDOS_DESATIVADOS",
+    "PREFIXO", "MODERADORES", "ESPERA_COMANDO", "PEDIDOS_MAXIMOS", "FILA_PEDIDOS", "COMANDOS_DESATIVADOS",
     "TOSU_URL", "AVISAR_MAPA", "AVISAR_RECORDE", "OSU_USUARIO", "OSU_IRC_SENHA", "WEB_PORTA", "WEB_REDE_LOCAL")}
 SECRETAS = ("osu_irc_senha",)  # ficam só no config.json: a página nunca mostra nem muda
 LIMITES = {"VELOCIDADE": (-10, 10), "VOLUME": (0, 100), "TAMANHO_MAXIMO": (1, None), "FILA_MAXIMA": (1, None),
@@ -424,17 +426,28 @@ def mandar_no_osu(texto: str) -> str:
         return f"não consegui conectar no chat do osu! ({e})"
 
 
-def abrir_pedido(p: dict):
-    """!proximo: manda o pedido no seu chat do osu! (se configurado); senão, ou se der erro, abre no navegador."""
+trava_irc = threading.Lock()  # um envio de cada vez: duas conexões juntas com o mesmo nome se atrapalham
+
+
+def abrir_pedido(p: dict, navegador: bool = True):
+    """Manda o pedido no seu chat do osu! (se configurado). Senão, ou se der erro: abre no navegador
+    (!proximo) ou só deixa o link na janela (fila desligada, para não abrir o navegador no meio do mapa)."""
     if OSU_USUARIO.strip() and OSU_IRC_SENHA.strip():
         # no chat do osu!, [link texto] vira o texto clicável. Colchetes no texto quebrariam o link.
         rotulo = "abrir o mapa" if "osu.ppy.sh" in p["texto"] else p["texto"]
         limpo = lambda t: re.sub(r"[\[\]\r\n]", "", t)
-        erro = mandar_no_osu(f"Pedido de {limpo(p['nome'])}: [{p['url']} {limpo(rotulo)}]")
+        with trava_irc:
+            erro = mandar_no_osu(f"Pedido de {limpo(p['nome'])}: [{p['url']} {limpo(rotulo)}]")
         if not erro:
             print("  (mandado no seu chat do osu!)")
             return
+        if not navegador:
+            print(f"*** {erro}. O link do pedido está logo acima.")
+            return
         print(f"*** {erro}. Abrindo no navegador.")
+    elif not navegador:
+        print("  (para os pedidos irem para o osu!, preencha osu_usuario e osu_irc_senha no config.json)")
+        return
     webbrowser.open(p["url"])
 
 
@@ -574,7 +587,7 @@ ultimo_comando = {}     # unique_id -> horário do último comando (anti-spam)
 COMANDOS_PUBLICOS = ["np", "pp", "rank", "recorde", "pedir", "pedidos", "mensagens", "top", "copiar"]
 COMANDOS_MOD = ["mudo", "voltar", "limpar", "apelido", "velocidade", "volume", "voz", "nomes", "bloquear",
                 "desbloquear", "ligar", "desligar", "avisos", "espera", "tamanho", "fila",
-                "proximo", "fecharpedidos", "abrirpedidos", "zerarpedidos", "limitepedidos"]
+                "proximo", "fecharpedidos", "abrirpedidos", "zerarpedidos", "limitepedidos", "filapedidos"]
 COMANDOS_DONO = ["mod", "desmod"]  # só você: se um mod pudesse criar mods, qualquer um daria acesso a qualquer um
 # atalhos: !vol 70 é o mesmo que !volume 70. Desligar um comando desliga os atalhos dele também.
 APELIDOS_COMANDO = {
@@ -593,7 +606,8 @@ def desativado(cmd: str) -> bool:
 
 
 FALADO = {"proximo": "próximo", "fecharpedidos": "fechar pedidos", "abrirpedidos": "abrir pedidos",
-          "zerarpedidos": "zerar pedidos", "limitepedidos": "limite pedidos"}  # como a voz fala cada comando
+          "zerarpedidos": "zerar pedidos", "limitepedidos": "limite pedidos",
+          "filapedidos": "fila pedidos"}  # como a voz fala cada comando
 
 # !voz francisca -> nome da voz no config
 VOZES = {"francisca": "pt-BR-FranciscaNeural", "thalita": "pt-BR-ThalitaMultilingualNeural",
@@ -763,6 +777,11 @@ def tratar_comando(user, nome: str, texto: str, dono: str) -> bool:
             pedidos_abertos = cmd == "abrirpedidos"
             falar("Pedidos abertos!" if pedidos_abertos else "Pedidos fechados.")
             return True
+        if cmd == "filapedidos":
+            mudar_config({"fila_pedidos": not FILA_PEDIDOS})
+            falar("Fila de pedidos ligada." if FILA_PEDIDOS else
+                  "Fila de pedidos desligada: os pedidos vão direto para o chat do osu.")
+            return True
         if cmd == "zerarpedidos":
             pedidos.clear()
             salvar_pedidos()
@@ -825,6 +844,13 @@ def tratar_comando(user, nome: str, texto: str, dono: str) -> bool:
             falar(f"{nome}, os pedidos estão fechados agora.")
         elif not arg:
             falar(f"{nome}, manda o link ou o nome do mapa depois do comando.")
+        elif not FILA_PEDIDOS:  # sem fila: vai direto para o chat do osu!, sem a voz anunciar
+            if any(p.lower() in arg.lower() for p in PALAVRAS_BLOQUEADAS):
+                falar(f"{nome}, esse pedido não pode.")
+                return True
+            p = {"uid": uid, "nome": nome, "texto": arg, "url": link_do_pedido(arg)}
+            print(f"[pedido de {nome}: {arg}]\n  {p['url']}")
+            threading.Thread(target=abrir_pedido, args=(p, False), daemon=True).start()
         elif meu:
             falar(f"{nome}, você já tem um pedido na fila, na posição {meu}.")
         elif len(pedidos) >= PEDIDOS_MAXIMOS:
@@ -836,6 +862,9 @@ def tratar_comando(user, nome: str, texto: str, dono: str) -> bool:
             salvar_pedidos()
             print(f"[novo pedido de {nome}: {arg}]")
             falar(f"Pedido de {nome} anotado, posição {len(pedidos)}.")
+    elif cmd == "pedidos" and not FILA_PEDIDOS:
+        falar("A fila de pedidos está desligada: os pedidos vão direto para o osu." +
+              ("" if pedidos_abertos else " Os pedidos estão fechados."))
     elif cmd == "pedidos":
         meu = next((i for i, p in enumerate(pedidos, 1) if p["uid"] == uid), None)
         n = len(pedidos)
@@ -1037,6 +1066,8 @@ button.principal { background: var(--destaque); border-color: var(--destaque); c
     <h2>Pedidos de mapas</h2>
     <label for="pedidos_maximos">Tamanho máximo da fila de pedidos</label>
     <input type="number" id="pedidos_maximos" min="1">
+    <label class="check"><input type="checkbox" id="fila_pedidos"><span>Usar fila de pedidos<small>Desligado: cada pedido vai direto
+      para o seu chat do osu! (precisa do nome e da senha de IRC) e a voz não anuncia.</small></span></label>
   </section>
 
   <section>

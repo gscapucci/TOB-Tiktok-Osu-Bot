@@ -311,6 +311,7 @@ O chat pede mapas, eles entram numa fila e você abre um de cada vez.
 | `!fecharpedidos` / `!abrirpedidos` | Você/mods | Para / volta a aceitar pedidos (também aceita `!fechar pedidos`) |
 | `!zerarpedidos` | Você/mods | Apaga a fila inteira |
 | `!limitepedidos 20` | Você/mods | Muda o tamanho máximo da fila (fica gravado) |
+| `!filapedidos` | Você/mods | Liga/desliga a fila. Desligada, cada pedido vai direto para o seu chat do osu!, sem a voz anunciar (fica gravado) |
 
 - **No chat do osu!:** com `osu_usuario` e `osu_irc_senha` preenchidos no `config.json`, o `!proximo`
   manda o pedido numa mensagem sua para você mesmo, dentro do jogo. Clicando, pedido com link abre o
@@ -321,10 +322,15 @@ O chat pede mapas, eles entram numa fila e você abre um de cada vez.
 - Cada pessoa pode ter **um pedido por vez** na fila.
 - A fila fica visível no arquivo **`pedidos.txt`**, atualizado na hora.
 - A fila **zera** quando o programa é fechado.
+- **Sem fila** (`!filapedidos` ou `"fila_pedidos": false`): cada `!pedir` vai na hora para o seu chat do
+  osu! e a voz não anuncia. Sem limite por pessoa nem de tamanho; `!fecharpedidos`, palavras bloqueadas
+  e a espera entre comandos continuam valendo. Precisa do chat do osu! configurado; se o envio falhar,
+  o link fica só na janela (o navegador não abre sozinho no meio da partida).
 
 | Configuração | O que faz | Padrão |
 |---|---|---|
 | `pedidos_maximos` | Tamanho máximo da fila | `30` |
+| `fila_pedidos` | `false`: pedidos vão direto para o chat do osu!, sem fila e sem a voz anunciar | `true` |
 | Desligar tudo | `"comandos_desativados": ["pedir", "pedidos", "proximo", "fecharpedidos", "abrirpedidos", "zerarpedidos"]` | — |
 
 ---

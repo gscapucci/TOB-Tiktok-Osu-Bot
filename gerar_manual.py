@@ -312,6 +312,8 @@ s.append(tabela(["Comando", "O que faz"], [
     [cmd("!tamanho 150"), "Quantas letras de cada mensagem são lidas."],
     [cmd("!fila 10"), "Quantas mensagens podem ficar esperando a voz."],
     [cmd("!limitepedidos 20"), "Quantos pedidos cabem na fila."],
+    [cmd("!filapedidos"), "Liga ou desliga a fila de pedidos. Desligada, cada pedido vai direto para o "
+                          "seu chat do osu!, sem a voz anunciar (seção 6)."],
 ], [42, 128]))
 s.append(dica(f"Valores fora da faixa usam o limite mais próximo: {cmd('!volume 150')} vira volume 100. "
               f"O {cmd('!ligar')} e o {cmd('!desligar')} não podem ser desligados pelo chat, senão não "
@@ -392,6 +394,15 @@ s += itens([
     "A fila aparece no arquivo <b>pedidos.txt</b>, atualizado na hora. Dá para deixar aberto durante a live.",
     "A fila <b>zera</b> quando o programa é fechado.",
 ])
+s.append(p("Sem fila: pedidos direto no osu!", h2))
+s.append(p(f"Com {cmd('!filapedidos')} (você ou um moderador), a fila é desligada: cada {cmd('!pedir')} vai "
+           "<b>na hora</b> para o seu chat do osu!, e a voz <b>não anuncia</b> os pedidos. Não tem limite de "
+           f"um pedido por pessoa nem de tamanho, mas o {cmd('!fecharpedidos')}, as palavras bloqueadas e os "
+           f"15 segundos entre comandos continuam valendo. {cmd('!filapedidos')} de novo liga a fila. "
+           "Fica gravado (opção <b>fila_pedidos</b>)."))
+s.append(atencao("Sem fila, os pedidos só aparecem se o chat do osu! estiver configurado (veja acima). "
+                 "Se o envio falhar, o link fica só na janela do programa: o navegador não abre sozinho "
+                 "no meio da partida."))
 
 # ---------- 7 ----------
 s += [PageBreak(), p("7. osu! ao vivo", h1),
@@ -472,6 +483,7 @@ s.append(tabela(["Função", "Durante a live", "No config.json"], [
     ["Palavras bloqueadas", f"{cmd('!bloquear')} / {cmd('!desbloquear')}", '"palavras_bloqueadas": ["palavra"]'],
     ["Qualquer comando", f"{cmd('!desligar')} / {cmd('!ligar')}", '"comandos_desativados": ["copiar"]'],
     ["Aceitar pedidos", f"{cmd('!fecharpedidos')} / {cmd('!abrirpedidos')}", "—"],
+    ["Fila de pedidos", cmd("!filapedidos"), '"fila_pedidos": true / false'],
     ["Aviso de mapa novo", cmd("!avisos mapa"), '"avisar_mapa": true / false'],
     ["Aviso de recorde", cmd("!avisos recorde"), '"avisar_recorde": true / false'],
     ["Moderadores", f"{cmd('!mod')} / {cmd('!desmod')} (só você)", '"moderadores": ["usuario"]'],
@@ -597,6 +609,8 @@ s.append(Spacer(1, 8))
 s.append(p("<b>Pedidos de mapas e osu!</b>", rotulo))
 s.append(opcoes([
     ("pedidos_maximos", "Quantos pedidos cabem na fila. Quando enche, o !pedir responde que a fila está cheia."),
+    ("fila_pedidos", "<b>true</b>: os pedidos entram na fila e você abre com o !proximo. <b>false</b>: cada "
+                     "pedido vai direto para o seu chat do osu!, sem a voz anunciar."),
     ("avisar_mapa", "<b>true</b>: a voz anuncia quando você começa a jogar um mapa novo."),
     ("avisar_recorde", "<b>true</b>: a voz anuncia quando você bate o recorde de PP da live."),
     ("tosu_url", "Endereço onde o app busca os dados do tosu: <b>http://127.0.0.1:24050/json/v2</b>. "
