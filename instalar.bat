@@ -2,6 +2,7 @@
 rem Confere e instala tudo o que os scripts do projeto precisam:
 rem   1. o Python (instala o 3.13 pelo winget, se não tiver)
 rem   2. as bibliotecas do requirements.txt (só se faltar alguma)
+rem   3. o tosu, em tosu\tosu.exe (só se não tiver; depois ele mesmo se atualiza)
 rem Os outros .bat chamam este com "call instalar.bat" e depois usam "%PY%".
 chcp 65001 >nul
 cd /d "%~dp0"
@@ -22,11 +23,21 @@ echo.
 :bibliotecas
 rem só confere se as bibliotecas existem, sem carregar (bem mais rápido que importar)
 "%PY%" -c "import importlib.util as u, sys; sys.exit(any(u.find_spec(m) is None for m in ['TikTokLive', 'edge_tts', 'comtypes', 'PyInstaller', 'reportlab']))" >nul 2>&1
-if not errorlevel 1 exit /b 0
+if not errorlevel 1 goto tosu
 echo Instalando as bibliotecas necessárias. Só acontece na primeira vez...
 "%PY%" -m pip install --disable-pip-version-check -r requirements.txt
 if errorlevel 1 goto erro_pip
 echo Bibliotecas instaladas.
+echo.
+
+:tosu
+if exist "tosu\tosu.exe" exit /b 0
+echo Baixando o tosu (lê os dados do osu!). Só acontece na primeira vez, são uns 50 MB...
+rem pega a versão mais recente para Windows nas releases oficiais: github.com/tosuapp/tosu
+rem (o zip vai para dentro de tosu\ e não para o %TEMP%, que pode ter acento no nome do usuário)
+powershell -NoProfile -ExecutionPolicy Bypass -Command "$ErrorActionPreference = 'Stop'; $ProgressPreference = 'SilentlyContinue'; [Net.ServicePointManager]::SecurityProtocol = 'Tls12'; $r = Invoke-RestMethod 'https://api.github.com/repos/tosuapp/tosu/releases/latest' -Headers @{ 'User-Agent' = 'LeitorChat' }; $a = $r.assets | Where-Object { $_.name -like 'tosu-windows-*.zip' } | Select-Object -First 1; if (-not $a) { throw 'a release não tem o arquivo para Windows' }; New-Item -ItemType Directory -Force 'tosu' | Out-Null; $z = 'tosu\download.zip'; Invoke-WebRequest $a.browser_download_url -OutFile $z -UseBasicParsing; Expand-Archive -LiteralPath $z -DestinationPath 'tosu' -Force; Remove-Item -LiteralPath $z; Write-Host ('tosu ' + $r.tag_name + ' instalado.')"
+if errorlevel 1 goto erro_tosu
+if not exist "tosu\tosu.exe" goto erro_tosu
 echo.
 exit /b 0
 
@@ -60,3 +71,12 @@ exit /b 1
 echo.
 echo *** Não consegui instalar as bibliotecas. Confira a internet e tente de novo.
 exit /b 1
+
+:erro_tosu
+rem sem o tosu o chat funciona igual, só os comandos do osu! não respondem: por isso não para tudo
+echo.
+echo *** Não consegui baixar o tosu. O chat funciona normal, mas !np, !pp e os avisos do osu! não.
+echo *** Baixe o "tosu-windows" em https://github.com/tosuapp/tosu/releases e coloque o
+echo *** tosu.exe dentro da pasta "tosu", ao lado deste arquivo. Ou tente de novo depois.
+echo.
+exit /b 0

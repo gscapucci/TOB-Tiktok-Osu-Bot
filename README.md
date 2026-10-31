@@ -35,11 +35,11 @@ Ordem certa para a live:
 | Arquivo | Para que serve |
 |---|---|
 | `LeitorChat.exe` | O programa pronto. Não precisa de Python. |
-| `iniciar.bat` | Abre o programa direto pelo `leitor_chat.py`. Na primeira vez, instala sozinho o Python e as bibliotecas que faltarem. |
+| `iniciar.bat` | Abre o programa direto pelo `leitor_chat.py`. Na primeira vez, instala sozinho o Python, as bibliotecas e o tosu que faltarem. |
 | `config.json` | **Todas as configurações** (veja a [seção 2](#2-como-ligar-e-desligar-as-coisas)). |
 | `leitor_chat.py` | O código do programa. |
-| `tosu\tosu.exe` | O tosu, que lê os dados do osu! (versão 4.26.3, do GitHub oficial `tosuapp/tosu`). |
-| `LEIA-ME.md` | Este manual. |
+| `tosu\tosu.exe` | O tosu, que lê os dados do osu! (do GitHub oficial `tosuapp/tosu`). Se não estiver na pasta, o `instalar.bat` baixa a versão mais recente; depois ele mesmo se atualiza. |
+| `README.md` | Este manual. |
 | `Guia de uso - Leitor de Chat.pdf` | Guia de uso passo a passo, em PDF. |
 
 Arquivos para quem for mexer no código:
@@ -48,7 +48,7 @@ Arquivos para quem for mexer no código:
 |---|---|
 | `gerar_exe.bat` | Gera o `LeitorChat.exe` de novo a partir do `leitor_chat.py`. |
 | `gerar_manual.bat` | Gera o guia em PDF de novo (usa o `gerar_manual.py`). |
-| `instalar.bat` | Instala o que falta: o Python 3.13 (pelo winget) e as bibliotecas do `requirements.txt`. Os outros `.bat` já chamam ele sozinhos. |
+| `instalar.bat` | Instala o que falta: o Python 3.13 (pelo winget), as bibliotecas do `requirements.txt` e o tosu (uns 50 MB). Os outros `.bat` já chamam ele sozinhos. Se o download do tosu falhar, o chat funciona do mesmo jeito, só os recursos de osu! ficam sem resposta. |
 | `requirements.txt` | Lista das bibliotecas Python e versões usadas. |
 
 Na primeira vez, os `.bat` podem demorar alguns minutos para instalar tudo. Nas
