@@ -36,6 +36,10 @@ COMANDOS DO CHAT
   !rank                  seu rank global, PP e precisão
   !recorde               o recorde de PP desta live (!rec)
   !pedir <link ou nome>  pede um mapa do osu!
+                         também aceita o código: !pedir 123456 (o set, com todas as dificuldades)
+                         ou !pedir d1234567 (uma dificuldade específica)
+                         no link .../beatmapsets/123456#osu/1234567, o set é o 123456
+                         e a dificuldade é o 1234567
   !pedidos               quantos pedidos tem na fila e a posição da pessoa
 
   Você e os moderadores:
@@ -78,6 +82,37 @@ CONFIGURAÇÕES
   no Bloco de Notas (salve e abra o programa de novo).
   As seções 8 e 9 do guia em PDF explicam cada opção e como abrir
   a página pelo celular.
+
+  O que é cada opção do config.json:
+  voz                    voz que fala: "pt-BR-FranciscaNeural", "pt-BR-ThalitaMultilingualNeural",
+                         "pt-BR-AntonioNeural", "pt-PT-RaquelNeural", "pt-PT-DuarteNeural"
+                         ou "windows" (funciona sem internet)
+  velocidade             velocidade da voz, de -10 (lenta) a 10 (rápida)
+  volume                 volume da voz, de 0 a 100
+  ler_nome               true: fala "Fulano disse: ..." antes da mensagem; false: só a mensagem
+  tamanho_maximo         mensagens com mais letras que isso são cortadas
+  fila_maxima            quantas mensagens esperam para ser lidas; com o chat rápido,
+                         as mais antigas são descartadas
+  palavras_bloqueadas    mensagens com estas palavras não são lidas. ex.: ["spam", "palavrão"]
+  prefixo                símbolo que começa os comandos do chat (o "!" de !pedir)
+  moderadores            usuários do TikTok (sem @) que podem usar os comandos de moderação
+  espera_comando         segundos que cada pessoa espera entre um comando e outro
+  pedidos_maximos        quantos pedidos de mapas cabem na fila
+  fila_pedidos           true: os pedidos entram na fila; false: cada !pedir vai direto
+                         para o seu chat do osu!
+  comandos_desativados   comandos desligados, sem o !. ex.: ["copiar", "top"]
+  tosu_url               endereço do tosu; normalmente não precisa mudar
+  avisar_mapa            true: fala "Agora: Artista - Música" quando você começa um mapa novo
+  avisar_recorde         true: fala quando você bate o recorde de PP da live
+  osu_usuario            seu nome no osu! (para o !proximo mandar o pedido no seu chat do osu!)
+  osu_irc_senha          senha de IRC, NÃO a da conta: osu.ppy.sh > Configurações > Legacy API.
+                         Só dá para mudar no config.json, a página não mostra
+  web_porta              porta da página de configurações (0 desliga). Vale ao reabrir
+  web_rede_local         true: a página abre também no celular/outro PC da mesma rede.
+                         Vale ao reabrir
+
+  No config.json: textos entre aspas, true/false em minúsculo, vírgula no fim
+  de cada linha menos a última, e nada de comentários.
 
 
 ARQUIVOS

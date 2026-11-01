@@ -362,6 +362,9 @@ s.append(p("Como o chat pede", h2))
 s += itens([
     f"Pelo link: {cmd('!pedir https://osu.ppy.sh/beatmapsets/...')}",
     f"Pelo nome: {cmd('!pedir Freedom Dive')}. Útil porque o TikTok costuma bloquear links no chat.",
+    f"Pelo código do set: {cmd('!pedir 123456')}. É o número depois de <b>beatmapsets/</b> no link.",
+    f"Por uma dificuldade específica: {cmd('!pedir d1234567')}. É o número depois de <b>#osu/</b> no link, "
+    "com um <b>d</b> na frente.",
 ])
 s.append(fala("Pedido de Caio anotado, posição 3."))
 s.append(p("Como você abre os pedidos", h2))

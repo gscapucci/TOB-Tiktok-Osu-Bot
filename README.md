@@ -306,6 +306,8 @@ O chat pede mapas, eles entram numa fila e você abre um de cada vez.
 |---|---|---|
 | `!pedir https://osu.ppy.sh/beatmapsets/...` | Todos | Pede pelo link |
 | `!pedir Freedom Dive` | Todos | Pede pelo nome (útil porque o TikTok costuma bloquear links) |
+| `!pedir 123456` | Todos | Pede pelo código do set (o número depois de `beatmapsets/` no link) |
+| `!pedir d1234567` | Todos | Pede uma dificuldade específica (o número depois de `#osu/`, com `d` na frente) |
 | `!pedidos` | Todos | "Tem 5 pedidos na fila. O seu é o número 3." |
 | `!proximo` | Você/mods | Manda o próximo no seu chat do osu! (ou abre no navegador) e fala de quem é |
 | `!fecharpedidos` / `!abrirpedidos` | Você/mods | Para / volta a aceitar pedidos (também aceita `!fechar pedidos`) |

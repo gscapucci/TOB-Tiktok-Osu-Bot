@@ -16,7 +16,7 @@ Comandos do chat (as respostas são faladas):
     (o que estes comandos mudam fica gravado no config.json)
 
 Pedidos de mapas do osu! (a fila fica salva em pedidos.txt):
-    Todo mundo:  !pedir <link ou nome do mapa>  !pedidos
+    Todo mundo:  !pedir <link, nome, código do set ou d + código da dificuldade>  !pedidos
     Você e MODERADORES:  !proximo (abre no navegador)  !fecharpedidos
                          !abrirpedidos  !zerarpedidos  !limitepedidos <número>
                          !filapedidos (liga/desliga a fila: desligada, cada pedido vai direto para o osu!)
@@ -385,10 +385,14 @@ pedidos_abertos = True  # !fecharpedidos / !abrirpedidos
 
 
 def link_do_pedido(texto: str) -> str:
-    """Link do beatmap, se a pessoa mandou um; senão, a busca do osu! com o que ela escreveu."""
+    """Link do beatmap, se a pessoa mandou um link ou código; senão, a busca do osu! com o que ela escreveu.
+    Código: só o número = set (beatmapsets/123); "d" + número = uma dificuldade específica (beatmaps/123)."""
     m = re.search(r"osu\.ppy\.sh/\S+", texto)
     if m:
         return "https://" + m.group(0)
+    m = re.fullmatch(r"(d?)\s*(\d+)", texto.strip(), re.IGNORECASE)
+    if m:
+        return f"https://osu.ppy.sh/{'b' if m.group(1) else 's'}/{m.group(2)}"
     return "https://osu.ppy.sh/beatmapsets?q=" + urllib.parse.quote(texto)
 
 
@@ -505,7 +509,7 @@ def abrir_pedido(p: dict, navegador: bool = True):
     (!proximo) ou só deixa o link na janela (fila desligada, para não abrir o navegador no meio do mapa)."""
     if OSU_USUARIO.strip() and OSU_IRC_SENHA.strip():
         # no chat do osu!, [link texto] vira o texto clicável. Colchetes no texto quebrariam o link.
-        rotulo = "abrir o mapa" if "osu.ppy.sh" in p["texto"] else p["texto"]
+        rotulo = p["texto"] if "beatmapsets?q=" in p["url"] else "abrir o mapa"  # link ou código: sem texto útil
         limpo = lambda t: re.sub(r"[\[\]\r\n]", "", t)
         erro = mandar_no_osu(f"Pedido de {limpo(p['nome'])}: [{p['url']} {limpo(rotulo)}]")
         if not erro:
@@ -913,7 +917,7 @@ def tratar_comando(user, nome: str, texto: str, dono: str) -> bool:
         if not pedidos_abertos:
             falar(f"{nome}, os pedidos estão fechados agora.")
         elif not arg:
-            falar(f"{nome}, manda o link ou o nome do mapa depois do comando.")
+            falar(f"{nome}, manda o link, o nome ou o código do mapa depois do comando.")
         elif not FILA_PEDIDOS:  # sem fila: vai direto para o chat do osu!, sem a voz anunciar
             if any(p.lower() in arg.lower() for p in PALAVRAS_BLOQUEADAS):
                 falar(f"{nome}, esse pedido não pode.")
