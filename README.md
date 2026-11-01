@@ -22,17 +22,22 @@ e se conecta ao osu! (via tosu) para falar sobre o mapa, o PP e o seu perfil.
 
 ## 1. Como abrir
 
-Ordem certa para a live:
-
 1. Abra o **osu!**
-2. **Comece a live** no TikTok
-3. Abra o **LeitorChat.exe** (ou o `iniciar.bat`) e digite seu usuário do TikTok, sem o @
+2. Abra o **LeitorChat.exe** (ou o `iniciar.bat`). Na primeira vez, digite seu usuário do TikTok,
+   sem o @: ele fica guardado e, das próximas vezes, o programa entra sozinho depois de 5 segundos
+   (nessa contagem, **T** abre o modo de teste e **U** troca de usuário)
+3. **Comece a live** no TikTok, antes ou depois de abrir o programa, tanto faz
 
 O programa abre o **tosu** (`tosu\tosu.exe`) sozinho, numa janela separada, se ele ainda
 não estiver aberto. Fechar o programa não fecha o tosu.
 
-> A live precisa já estar **ao vivo** quando você abrir o programa.
+> Se a live ainda não começou, o programa espera e conecta sozinho quando ela começar.
+> Se a conexão cair no meio da live, ele avisa pela voz e volta sozinho
+> ("Voltei a ler o chat da live."). Nenhuma mensagem é lida duas vezes.
 > Para fechar: **Ctrl+C** na janela, depois **Enter**.
+>
+> O usuário do TikTok fica em `tiktok_usuario` no `config.json`, e também dá para trocar
+> na página de configurações (vale quando o programa abre de novo).
 
 | Arquivo | Para que serve |
 |---|---|
@@ -100,6 +105,7 @@ quanto para o `iniciar.bat`.
 
 ```json
 {
+  "tiktok_usuario": "seu_usuario",
   "voz": "pt-BR-FranciscaNeural",
   "velocidade": 1,
   "volume": 100,
@@ -315,10 +321,11 @@ O chat pede mapas, eles entram numa fila e você abre um de cada vez.
 | `!limitepedidos 20` | Você/mods | Muda o tamanho máximo da fila (fica gravado) |
 | `!filapedidos` | Você/mods | Liga/desliga a fila. Desligada, cada pedido vai direto para o seu chat do osu!, sem a voz anunciar (fica gravado) |
 
-- **No chat do osu!:** com `osu_usuario` e `osu_irc_senha` preenchidos no `config.json`, o `!proximo`
+- **No chat do osu!:** com o seu nome e a senha de IRC preenchidos (na seção osu! da página de configurações, ou
+  `osu_usuario` e `osu_irc_senha` no `config.json`), o `!proximo`
   manda o pedido numa mensagem sua para você mesmo, dentro do jogo. Clicando, pedido com link abre o
   mapa direto no jogo. A senha é a de **IRC** (osu.ppy.sh → Configurações → Legacy API), não a da conta,
-  e a página de configurações nunca mostra ela. Se o envio falhar, o pedido abre no navegador.
+  e a página de configurações nunca mostra ela (o campo fica em branco; só preencha para trocar). Se o envio falhar, o pedido abre no navegador.
   O programa entra no chat do osu! uma vez só, no primeiro pedido, e fica conectado até fechar
   (entrar a cada pedido seriam muitos logins seguidos, e o osu! pode deslogar o jogo). Se a conexão
   cair, entra de novo sozinho no próximo pedido.
@@ -326,6 +333,13 @@ O chat pede mapas, eles entram numa fila e você abre um de cada vez.
 - No **lazer**: baixe o mapa no site (logado) e dê dois cliques no `.osz`.
 - Cada pessoa pode ter **um pedido por vez** na fila.
 - A fila fica visível no arquivo **`pedidos.txt`**, atualizado na hora.
+- **Fila na tela da live:** na página de configurações, seção Pedidos de mapas, clique em
+  **Abrir janela da fila**. Abre uma janela pequena "Fila de pedidos" (fundo preto, letras brancas)
+  com os próximos pedidos, que se atualiza sozinha. No **TikTok LIVE Studio**, adicione uma
+  **Captura de janela** dessa janela. Ela pode ficar atrás do jogo, mas não minimizada.
+  (O LIVE Studio não aceita o endereço do próprio PC numa fonte de link.)
+  No OBS e parecidos: fonte de navegador com `http://localhost:8765/pedidos?transparente`.
+  `?max=3` no fim do endereço mostra só os 3 primeiros.
 - A fila **zera** quando o programa é fechado.
 - **Sem fila** (`!filapedidos` ou `"fila_pedidos": false`): cada `!pedir` vai na hora para o seu chat do
   osu! e a voz não anuncia. Sem limite por pessoa nem de tamanho; `!fecharpedidos`, palavras bloqueadas
@@ -425,7 +439,8 @@ configurações. Os comandos de chat que mudam uma configuração gravam no
 
 | Problema | Solução |
 |---|---|
-| "Erro: ... UserOfflineError" | A live não está ao vivo, ou o usuário foi digitado errado. Comece a live antes de abrir o programa. |
+| "@fulano não está ao vivo agora" | Normal: o programa espera e conecta sozinho quando a live começar. |
+| "Não achei a live de @fulano" | O usuário pode estar errado: troque na página de configurações (ou `tiktok_usuario` no `config.json`) e abra o programa de novo. Quem nunca fez live também vê essa mensagem até começar a primeira. |
 | O Windows diz "O Windows protegeu o computador" | Clique em **Mais informações → Executar assim mesmo** (acontece porque o programa não tem assinatura digital). |
 | A voz não fala nada | A voz neural precisa de internet. Sem internet, use `"voz": "windows"`. Veja também se alguém usou `!mudo`. |
 | `!np`/`!pp`/`!rank` respondem "Não consegui ver o osu agora" | Veja se a janela do tosu está aberta (se não, abra o `tosu\tosu.exe`) e confira em http://127.0.0.1:24050 |
@@ -433,7 +448,7 @@ configurações. Os comandos de chat que mudam uma configuração gravam no
 | Aparece "o relógio do computador está X minutos adiantado" (ou atrasado) | O programa já usa a hora da internet e funciona normal. Para acertar o Windows: Configurações → Hora e idioma → Data e hora → **Sincronizar agora**. |
 | Mudei o `config.json` e nada mudou | Feche e abra o programa de novo. Veja também se apareceu um aviso de erro no `config.json` ao abrir. |
 | A planilha não salvou | Feche o Excel e encerre o programa de novo. |
-| Quero testar sem estar ao vivo | Digite `teste` no lugar do usuário do TikTok. O que você digitar na janela entra como mensagem do chat (`Fulano: oi` manda como outra pessoa; `sair` fecha). |
+| Quero testar sem estar ao vivo | Aperte **T** na contagem ao abrir o programa (ou digite `teste` no lugar do usuário do TikTok). O que você digitar na janela entra como mensagem do chat (`Fulano: oi` manda como outra pessoa; `sair` fecha). |
 
 ---
 

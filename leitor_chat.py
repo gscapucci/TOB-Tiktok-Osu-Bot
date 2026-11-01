@@ -3,7 +3,7 @@ Leitor de chat da live do TikTok em voz alta (pt-BR).
 
 Uso:
     python leitor_chat.py seu_usuario
-    (sem o @; a live precisa estar AO VIVO quando você rodar)
+    (sem o @; fica guardado no config.json. Se a live não começou ou cair, ele espera e volta sozinho)
 
 Comandos do chat (as respostas são faladas):
     Todo mundo:  !comandos  !mensagens  !top  !copiar <texto>
@@ -48,11 +48,14 @@ import webbrowser
 from datetime import datetime, timedelta, timezone
 
 from TikTokLive import TikTokLiveClient
+from TikTokLive.client.errors import UserNotFoundError, UserOfflineError
 from TikTokLive.events import CommentEvent, ConnectEvent, DisconnectEvent, JoinEvent
 
 # ---------------- Configurações ----------------
 # Estes são os valores padrão. Para mudar, use a página de configurações ou edite o
 # config.json ao lado do programa (ele é criado sozinho na primeira vez que o programa abre).
+TIKTOK_USUARIO = ""     # seu usuário do TikTok, sem @ (perguntado e guardado na primeira vez)
+
 # Vozes disponíveis (as neurais precisam de internet e soam mais naturais):
 #   "pt-BR-FranciscaNeural"           feminina
 #   "pt-BR-ThalitaMultilingualNeural" feminina
@@ -100,10 +103,10 @@ ARQUIVO_CONFIG = os.path.join(PASTA, "config.json")
 
 # nome no config.json -> variável aqui do programa
 OPCOES = {nome.lower(): nome for nome in (
-    "VOZ", "VELOCIDADE", "VOLUME", "LER_NOME", "TAMANHO_MAXIMO", "FILA_MAXIMA", "PALAVRAS_BLOQUEADAS",
+    "TIKTOK_USUARIO", "VOZ", "VELOCIDADE", "VOLUME", "LER_NOME", "TAMANHO_MAXIMO", "FILA_MAXIMA", "PALAVRAS_BLOQUEADAS",
     "PREFIXO", "MODERADORES", "ESPERA_COMANDO", "PEDIDOS_MAXIMOS", "FILA_PEDIDOS", "COMANDOS_DESATIVADOS",
     "TOSU_URL", "AVISAR_MAPA", "AVISAR_RECORDE", "OSU_USUARIO", "OSU_IRC_SENHA", "WEB_PORTA", "WEB_REDE_LOCAL")}
-SECRETAS = ("osu_irc_senha",)  # ficam só no config.json: a página nunca mostra nem muda
+SECRETAS = ("osu_irc_senha",)  # a página nunca mostra: só diz se tem uma salva e deixa trocar
 LIMITES = {"VELOCIDADE": (-10, 10), "VOLUME": (0, 100), "TAMANHO_MAXIMO": (1, None), "FILA_MAXIMA": (1, None),
            "ESPERA_COMANDO": (0, None), "PEDIDOS_MAXIMOS": (1, None), "WEB_PORTA": (0, 65535)}
 
@@ -151,6 +154,8 @@ def aplicar_config(config: dict) -> list:
             avisos.append(f"\"{chave}\" deveria ser {TIPOS.get(esperado, esperado.__name__)}. "
                           f"Mantive: {json.dumps(atual, ensure_ascii=False)}")
             continue
+        if nome == "TIKTOK_USUARIO":
+            valor = valor.strip().lstrip("@")
         if nome == "PREFIXO" and not valor.strip():
             avisos.append(f"\"{chave}\" não pode ficar vazio. Mantive: {json.dumps(atual, ensure_ascii=False)}")
             continue
@@ -400,6 +405,7 @@ def link_do_pedido(texto: str) -> str:
 # fechar: entrar e sair a cada pedido são muitos logins seguidos na sua conta, e o osu! pode te deslogar.
 irc = None              # a conexão aberta (None = desconectado)
 irc_nick = ""           # com que nome ela entrou
+irc_senha = ""          # e com que senha
 irc_ultimo_envio = 0.0
 trava_irc = threading.Lock()  # um envio de cada vez
 
@@ -417,7 +423,7 @@ def fechar_irc():
 
 def conectar_irc(nick: str) -> str:
     """Entra no IRC do osu! (com a trava_irc já pega). Devolve "" se entrou, senão o motivo."""
-    global irc, irc_nick
+    global irc, irc_nick, irc_senha
     import socket
     try:
         s = socket.create_connection(("irc.ppy.sh", 6667), timeout=10)
@@ -446,7 +452,7 @@ def conectar_irc(nick: str) -> str:
                     return "o osu! recusou a senha de IRC"
                 elif partes[1:2] == ["001"]:  # entrou
                     s.settimeout(None)
-                    irc, irc_nick = s, nick
+                    irc, irc_nick, irc_senha = s, nick, OSU_IRC_SENHA.strip()
                     threading.Thread(target=ouvir_irc, args=(s,), daemon=True).start()
                     print("[conectado ao chat do osu!]")
                     return ""
@@ -485,7 +491,8 @@ def mandar_no_osu(texto: str) -> str:
     global irc_ultimo_envio
     nick = OSU_USUARIO.strip().replace(" ", "_")  # no IRC do osu! os espaços do nome viram _
     with trava_irc:
-        if irc is not None and irc_nick != nick:  # trocou o nome na página: entra de novo com o novo
+        if irc is not None and (irc_nick, irc_senha) != (nick, OSU_IRC_SENHA.strip()):
+            # trocou o nome ou a senha na página: entra de novo com os novos
             fechar_irc()
         for _ in range(2):  # se a conexão tinha caído sem avisar, entra de novo e tenta mais uma vez
             if irc is None:
@@ -520,7 +527,7 @@ def abrir_pedido(p: dict, navegador: bool = True):
             return
         print(f"*** {erro}. Abrindo no navegador.")
     elif not navegador:
-        print("  (para os pedidos irem para o osu!, preencha osu_usuario e osu_irc_senha no config.json)")
+        print("  (para os pedidos irem para o osu!, preencha o nome e a senha de IRC na página de configurações)")
         return
     webbrowser.open(p["url"])
 
@@ -994,33 +1001,141 @@ class PaginaConfig(http.server.BaseHTTPRequestHandler):
     def dados_da_pagina(self) -> dict:
         config = {k: v for k, v in config_atual().items() if k not in SECRETAS}
         return {"config": config, "comandos": TODOS_COMANDOS,
-                "apelidos": APELIDOS_COMANDO}
+                "apelidos": APELIDOS_COMANDO, "senha_salva": bool(OSU_IRC_SENHA.strip())}
 
     def do_GET(self):
         if not self.host_ok():
             return self.responder(403, "text/plain; charset=utf-8", b"acesso negado")
-        if self.path == "/":
+        caminho = urllib.parse.urlsplit(self.path).path.rstrip("/") or "/"
+        if caminho == "/":
             self.responder(200, "text/html; charset=utf-8", PAGINA.encode("utf-8"))
-        elif self.path == "/api/config":
+        elif caminho == "/api/config":
             self.responder_json(self.dados_da_pagina())
+        elif caminho == "/pedidos":
+            self.responder(200, "text/html; charset=utf-8", PAGINA_PEDIDOS.encode("utf-8"))
+        elif caminho == "/api/pedidos":
+            # só o que aparece na tela: nome e pedido (o @ e o link ficam de fora)
+            self.responder_json({"pedidos": [{"nome": x["nome"], "texto": x["texto"]} for x in list(pedidos)],
+                                 "abertos": pedidos_abertos, "fila": FILA_PEDIDOS, "prefixo": PREFIXO})
         else:
             self.responder(404, "text/plain; charset=utf-8", b"nada aqui")
 
     def do_POST(self):
         # exigir JSON faz o navegador barrar envios vindos de outros sites
-        if not self.host_ok() or self.path != "/api/config" or \
+        if not self.host_ok() or self.path not in ("/api/config", "/api/janela-pedidos") or \
                 not (self.headers.get("Content-Type") or "").startswith("application/json"):
             return self.responder(403, "text/plain; charset=utf-8", b"acesso negado")
+        if self.path == "/api/janela-pedidos":
+            erro = abrir_janela_pedidos()
+            return self.responder_json({"erro": erro} if erro else {})
         try:
             dados = json.loads(self.rfile.read(int(self.headers.get("Content-Length", 0))).decode("utf-8"))
             if not isinstance(dados, dict):
                 raise ValueError
         except (ValueError, UnicodeDecodeError):
             return self.responder_json({"erro": "dados inválidos"}, 400)
-        dados = {k: v for k, v in dados.items() if k.lower() not in SECRETAS}
+        # senha em branco = continua a que já está salva (a página nunca recebe a senha para mandar de volta)
+        dados = {k: v for k, v in dados.items()
+                 if k.lower() not in SECRETAS or (isinstance(v, str) and v.strip())}
         print("[configurações alteradas pela página]")
         avisos = mudar_config(dados)
         self.responder_json({"avisos": avisos, **self.dados_da_pagina()})
+
+
+PAGINA_PEDIDOS = """<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Fila de pedidos</title>
+<style>
+/* Padrão: a janela inteira é o painel escuro, pronta para a Captura de janela do LIVE Studio.
+   ?transparente: só a caixa, com o resto transparente (fonte de navegador do OBS e parecidos). */
+html, body { margin: 0; background: #000; }
+body { font: 700 26px/1.3 system-ui, "Segoe UI", sans-serif; color: #fff; overflow: hidden; }
+#painel { box-sizing: border-box; padding: 12px 18px 14px; text-shadow: 1px 1px 2px #000; }
+html.transparente, html.transparente body { background: transparent; }
+html.transparente body { padding: 8px; }
+html.transparente #painel { display: inline-block; min-width: 14em; max-width: calc(100vw - 16px);
+  background: rgba(0, 0, 0, .85); border-radius: 14px; }
+h1 { font-size: 1.1em; margin: 0 0 6px; color: #fff; }
+h1 small { font-size: .65em; color: #fff; font-weight: 600; }
+ol { margin: 0; padding: 0; list-style: none; }
+li { display: flex; gap: .45em; align-items: baseline; padding: 3px 0; }
+.pos { color: #fff; min-width: 1.6em; font-variant-numeric: tabular-nums; }
+.mapa { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 22em; }
+.quem { font-size: .7em; color: #fff; font-weight: 600; white-space: nowrap; }
+.vazio, .mais { font-size: .75em; color: #fff; font-weight: 600; }
+</style>
+</head>
+<body>
+<div id="painel">
+<h1>Pedidos <small id="estado"></small></h1>
+<ol id="lista"></ol>
+<div id="extra"></div>
+</div>
+<script>
+const params = new URLSearchParams(location.search);
+const MAX = Math.max(1, parseInt(params.get("max")) || 5);
+if (params.has("transparente")) document.documentElement.classList.add("transparente");
+const $ = id => document.getElementById(id);
+
+function el(tag, classe, texto) {
+  const e = document.createElement(tag);
+  e.className = classe; e.textContent = texto;
+  return e;
+}
+
+async function atualizar() {
+  let d;
+  try {
+    d = await (await fetch("/api/pedidos", {cache: "no-store"})).json();
+  } catch (e) {
+    return;  // programa fechado: mantém o que estava na tela e tenta de novo
+  }
+  const n = d.pedidos.length;
+  $("estado").textContent = !d.fila ? "(direto no osu!)" : !d.abertos ? "(fechados)" : n ? `(${n})` : "";
+  $("lista").replaceChildren(...d.pedidos.slice(0, MAX).map((p, i) => {
+    const li = document.createElement("li");
+    const mapa = /^d?\\s*\\d+$/i.test(p.texto.trim()) ? "#" + p.texto.trim() : p.texto;
+    li.append(el("span", "pos", (i + 1) + "."), el("span", "mapa", mapa), el("span", "quem", p.nome));
+    return li;
+  }));
+  $("extra").replaceChildren(
+    n > MAX ? el("div", "mais", `+ ${n - MAX} na fila`) :
+    n === 0 && d.fila && d.abertos ? el("div", "vazio", `Peça com ${d.prefixo}pedir <link, nome ou código>`) : "");
+}
+
+atualizar();
+setInterval(atualizar, 2000);
+</script>
+</body>
+</html>
+"""
+
+
+def abrir_janela_pedidos() -> str:
+    """Abre a fila de pedidos numa janela própria do Edge (sem barra de endereço nem abas), para a
+    Captura de janela do TikTok LIVE Studio. Devolve "" se abriu, senão o motivo."""
+    if not WEB_PORTA:
+        return "a página está desligada (web_porta 0)"
+    url = f"http://127.0.0.1:{WEB_PORTA}/pedidos"
+    for base in (os.environ.get("ProgramFiles(x86)"), os.environ.get("ProgramFiles")):
+        edge = os.path.join(base or "", "Microsoft", "Edge", "Application", "msedge.exe")
+        if base and os.path.exists(edge):
+            break
+    else:
+        webbrowser.open(url)  # sem Edge: abre no navegador padrão, numa aba comum
+        return ""
+    # perfil separado: assim a janela abre do tamanho certo mesmo com o Edge já aberto
+    perfil = os.path.join(os.environ.get("LOCALAPPDATA") or PASTA, "LeitorChat", "janela-pedidos")
+    try:
+        subprocess.Popen([edge, f"--app={url}", "--window-size=520,420", f"--user-data-dir={perfil}",
+                          "--no-first-run", "--no-default-browser-check"])
+    except OSError as e:
+        return f"não consegui abrir o Edge ({e})"
+    print("[janela da fila de pedidos aberta: use Captura de janela no TikTok LIVE Studio]")
+    return ""
 
 
 def ip_local() -> str:
@@ -1072,7 +1187,7 @@ section { background: var(--cartao); border: 1px solid var(--borda); border-radi
 h2 { font-size: 16px; margin: 0 0 4px; }
 label { display: block; margin: 12px 0 4px; font-weight: 600; }
 small { display: block; color: var(--suave); font-weight: 400; }
-input[type=text], input[type=number], select, textarea { width: 100%; padding: 8px; border: 1px solid var(--borda);
+input[type=text], input[type=password], input[type=number], select, textarea { width: 100%; padding: 8px; border: 1px solid var(--borda);
   border-radius: 6px; background: var(--fundo); color: inherit; font: inherit; }
 textarea { min-height: 72px; resize: vertical; }
 label.check { display: flex; gap: 8px; align-items: flex-start; }
@@ -1095,6 +1210,12 @@ button.principal { background: var(--destaque); border-color: var(--destaque); c
 <main>
   <h1>Leitor de Chat</h1>
   <p class="sub">Ao salvar, as mudanças já valem na live e ficam gravadas no config.json.</p>
+
+  <section>
+    <h2>Live</h2>
+    <label for="tiktok_usuario">Seu usuário do TikTok<small>Sem o @. Vale quando o programa abre de novo.</small></label>
+    <input type="text" id="tiktok_usuario" autocomplete="off" spellcheck="false">
+  </section>
 
   <section>
     <h2>Voz</h2>
@@ -1138,6 +1259,12 @@ button.principal { background: var(--destaque); border-color: var(--destaque); c
 
   <section>
     <h2>Pedidos de mapas</h2>
+    <p class="sub" style="margin:4px 0 8px">Para mostrar a fila na live pelo TikTok LIVE Studio: clique no botão,
+      e no LIVE Studio adicione uma <b>Captura de janela</b> da janela “Fila de pedidos”. Deixe a janela aberta
+      (pode ficar atrás do jogo, mas não minimizada).</p>
+    <button type="button" id="janela_pedidos">Abrir janela da fila</button>
+    <small style="margin-top:6px">No OBS e parecidos: fonte de navegador com <b id="link_pedidos"></b>.
+      <code>?max=3</code> no fim mostra só os 3 primeiros.</small>
     <label for="pedidos_maximos">Tamanho máximo da fila de pedidos</label>
     <input type="number" id="pedidos_maximos" min="1">
     <label class="check"><input type="checkbox" id="fila_pedidos"><span>Usar fila de pedidos<small>Desligado: cada pedido vai direto
@@ -1151,8 +1278,12 @@ button.principal { background: var(--destaque); border-color: var(--destaque); c
     <label for="tosu_url">Endereço do tosu<small>Só mude se tiver mudado no tosu.</small></label>
     <input type="text" id="tosu_url">
     <label for="osu_usuario">Seu nome no osu!<small>Com ele e a senha de IRC, o !proximo manda o pedido no seu chat do osu!.
-      A senha de IRC fica só no config.json (osu_irc_senha), por segurança esta página não mostra.</small></label>
-    <input type="text" id="osu_usuario">
+</small></label>
+    <input type="text" id="osu_usuario" autocomplete="off">
+    <label for="osu_irc_senha">Senha de IRC do osu!<small>Não é a senha da conta: é a de osu.ppy.sh &gt; Configurações &gt;
+      Legacy API. Por segurança a página nunca mostra a senha salva; deixe em branco para manter a atual.</small></label>
+    <input type="password" id="osu_irc_senha" autocomplete="new-password" spellcheck="false">
+    <small id="senha_estado"></small>
   </section>
 
   <section>
@@ -1207,6 +1338,9 @@ function preencher(d) {
     l.append(i, c.prefixo + cmd);
     return l;
   }));
+  $("osu_irc_senha").value = "";
+  $("osu_irc_senha").placeholder = d.senha_salva ? "•••••••• (salva)" : "";
+  $("senha_estado").textContent = d.senha_salva ? "Tem uma senha salva." : "Nenhuma senha salva ainda.";
   atualizarFaixas();
 }
 
@@ -1220,6 +1354,8 @@ function coletar() {
     else if (el.type === "number" || el.type === "range") c[k] = Number(el.value);
     else c[k] = el.value;
   }
+  const senha = $("osu_irc_senha").value.trim();
+  if (senha) c.osu_irc_senha = senha;
   c.comandos_desativados = [...document.querySelectorAll("#cmds input")].filter(i => !i.checked).map(i => i.value);
   return c;
 }
@@ -1250,6 +1386,16 @@ async function salvar() {
 }
 
 document.addEventListener("input", e => { if (e.target.type === "range") atualizarFaixas(); });
+$("link_pedidos").textContent = location.origin + "/pedidos?transparente";
+$("janela_pedidos").onclick = async () => {
+  try {
+    const r = await fetch("/api/janela-pedidos", {method: "POST", headers: {"Content-Type": "application/json"}, body: "{}"});
+    const d = await r.json();
+    status(d.erro ? "Não abriu: " + d.erro : "Janela da fila aberta.", !!d.erro);
+  } catch (e) {
+    status("Não consegui falar com o programa. Ele está aberto?", true);
+  }
+};
 $("salvar").onclick = salvar;
 $("recarregar").onclick = carregar;
 carregar();
@@ -1316,6 +1462,99 @@ def modo_teste():
         processar_comentario(SimpleNamespace(unique_id=uid, nick_name=nome), texto, dono)
 
 
+ESPERA_LIVE_OFFLINE = 30   # segundos entre uma tentativa e outra enquanto a live não começa
+ESPERA_RECONEXAO = (5, 10, 20, 40, 60)  # depois de um erro: espera cada vez mais, até 60s
+
+
+def tecla_em(segundos: int, texto: str) -> str:
+    """Mostra o texto com a contagem ({} = segundos que faltam) e devolve a tecla apertada, em minúsculo
+    ("" se o tempo acabou). Fora de uma janela do Windows não espera."""
+    try:
+        import msvcrt
+    except ImportError:
+        return ""
+    if not sys.stdin.isatty():
+        return ""
+    fim = time.time() + segundos
+    tecla = ""
+    while (falta := fim - time.time()) > 0 and not tecla:
+        print("\r" + texto.format(int(falta) + 1) + " ", end="", flush=True)
+        if msvcrt.kbhit():
+            tecla = msvcrt.getwch().lower()
+        else:
+            time.sleep(0.05)
+    print("\n")
+    return tecla
+
+
+def escolher_usuario() -> str:
+    """Usuário do TikTok: o da linha de comando, senão o guardado no config.json, senão pergunta (e guarda)."""
+    if len(sys.argv) > 1:
+        return sys.argv[1].strip().lstrip("@")
+    if TIKTOK_USUARIO:
+        tecla = tecla_em(5, f"Entrando na live de @{TIKTOK_USUARIO} em {{}}s... "
+                            f"(T = testar sem live, U = trocar de usuário)")
+        if tecla == "t":
+            return "teste"
+        if tecla != "u":
+            return TIKTOK_USUARIO
+    usuario = ""
+    while not usuario:
+        usuario = input("Seu usuário do TikTok (sem @): ").strip().lstrip("@")
+    if usuario.lower() not in ("teste", "--teste"):
+        mudar_config({"tiktok_usuario": usuario})
+        print("Guardei o usuário: da próxima vez o programa já entra direto.\n")
+    return usuario
+
+
+def esperar(segundos: float):
+    """Espera mostrando a contagem na mesma linha (Ctrl+C interrompe)."""
+    fim = time.time() + segundos
+    while (falta := fim - time.time()) > 0:
+        print(f"\r  tentando de novo em {int(falta) + 1:>2}s... (Ctrl+C para sair) ", end="", flush=True)
+        time.sleep(min(1, falta))
+    print("\r" + " " * 50 + "\r", end="", flush=True)
+
+
+def ficar_na_live(client, usuario: str):
+    """Conecta e, se a live ainda não começou ou a conexão cair, fica tentando de novo até a pessoa fechar."""
+    erros = 0          # erros seguidos (para esperar cada vez mais)
+    ultimo_aviso = ""  # não repete a mesma mensagem a cada tentativa
+    while True:
+        try:
+            # sem o lote de mensagens recentes que o TikTok manda ao conectar (seriam lidas de novo)
+            client.run(process_connect_events=False)
+            # voltou sem erro: a conexão terminou (queda ou fim da live); o aviso já saiu no DisconnectEvent
+            espera, aviso, erros = ESPERA_RECONEXAO[0], "", 0
+        except KeyboardInterrupt:
+            return
+        except UserOfflineError:
+            espera, erros = ESPERA_LIVE_OFFLINE, 0
+            aviso = f"@{usuario} não está ao vivo agora. Assim que a live começar, eu conecto sozinho."
+        except UserNotFoundError:
+            espera, erros = ESPERA_LIVE_OFFLINE, 0
+            aviso = (f"Não achei a live de @{usuario}. Se o usuário estiver errado, troque na página de\n"
+                     f"  configurações ou em \"tiktok_usuario\" no config.json e abra o programa de novo.\n"
+                     f"  (Quem nunca fez live também cai aqui: é só começar a live.)")
+        except Exception as e:
+            espera = ESPERA_RECONEXAO[min(erros, len(ESPERA_RECONEXAO) - 1)]
+            erros += 1
+            aviso = f"Não consegui conectar à live ({type(e).__name__}: {e})."
+        if aviso and aviso != ultimo_aviso:
+            print(aviso)
+        ultimo_aviso = aviso
+        try:
+            if client.connected:  # garante que a próxima tentativa começa do zero
+                client._asyncio_loop.run_until_complete(client.disconnect())
+        except Exception:
+            pass
+        try:
+            esperar(espera)
+        except KeyboardInterrupt:
+            print()
+            return
+
+
 def main():
     carregar_config()
     iniciar_pagina()
@@ -1323,11 +1562,7 @@ def main():
     acertar_inicio()
     atexit.register(fechar_irc)  # sai do chat do osu! direitinho ao fechar
     salvar_pedidos()  # a fila começa vazia: o pedidos.txt não pode continuar mostrando a da live anterior
-    if len(sys.argv) > 1:
-        usuario = sys.argv[1]
-    else:
-        usuario = input("Seu usuário do TikTok (sem @): ")
-    usuario = usuario.strip().lstrip("@")
+    usuario = escolher_usuario()
     if usuario.lower() in ("teste", "--teste"):
         threading.Thread(target=narrador, daemon=True).start()
         threading.Thread(target=vigia_osu, daemon=True).start()
@@ -1340,6 +1575,7 @@ def main():
     threading.Thread(target=salvador_automatico, args=(arquivo,), daemon=True).start()
     threading.Thread(target=vigia_osu, daemon=True).start()
     client = TikTokLiveClient(unique_id=f"@{usuario}")
+    ja_conectou = False
 
     @client.on(JoinEvent)
     async def ao_entrar(event: JoinEvent):
@@ -1347,12 +1583,19 @@ def main():
 
     @client.on(ConnectEvent)
     async def ao_conectar(event: ConnectEvent):
-        print(f"Conectado à live de @{usuario}! Lendo o chat...\n")
-        fila.put("Conectado ao chat da live.")
+        nonlocal ja_conectou
+        if ja_conectou:
+            print(f"Voltei para a live de @{usuario}! Lendo o chat...\n")
+            fila.put("Voltei a ler o chat da live.")
+        else:
+            print(f"Conectado à live de @{usuario}! Lendo o chat...\n")
+            fila.put("Conectado ao chat da live.")
+        ja_conectou = True
 
     @client.on(DisconnectEvent)
     async def ao_desconectar(event: DisconnectEvent):
-        print("Desconectado da live.")
+        print("Caiu a conexão com a live (ou a live acabou). Tentando voltar...")
+        fila.put("Caiu a conexão com a live. Tentando voltar.")
 
     @client.on(CommentEvent)
     async def ao_comentar(event: CommentEvent):
@@ -1361,15 +1604,8 @@ def main():
         processar_comentario(event.user, event.comment or "", usuario)
 
     print(f"Conectando a @{usuario}... (Ctrl+C para sair)")
-    erro = False
     try:
-        # sem o lote de mensagens recentes que o TikTok manda ao conectar (seriam lidas de novo)
-        client.run(process_connect_events=False)
-    except KeyboardInterrupt:
-        pass
-    except Exception as e:
-        print(f"\nErro: {e}\nVerifique se o usuário está certo e se a live está ao vivo.")
-        erro = True
+        ficar_na_live(client, usuario)
     finally:
         try:
             salvar(arquivo)
@@ -1377,9 +1613,8 @@ def main():
             print("Feche a planilha no Excel para salvar a versão final.")
         if pessoas:
             print(f"\nRegistro salvo em: {arquivo}")
-    if erro or getattr(sys, "frozen", False):  # no .exe a janela fecharia sem dar tempo de ler
+    if getattr(sys, "frozen", False):  # no .exe a janela fecharia sem dar tempo de ler
         input("Pressione Enter para sair...")
-
 
 if __name__ == "__main__":
     main()

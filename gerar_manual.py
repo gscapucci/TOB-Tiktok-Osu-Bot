@@ -206,20 +206,28 @@ s.append(dica("Não precisa instalar Python nem nada mais. Só o osu! precisa es
 
 # ---------- 3 ----------
 s += [PageBreak(), p("3. Passo a passo de cada live", h1),
-      p("Siga esta ordem sempre que for fazer live.", sub)]
+      p("Siga estes passos sempre que for fazer live.", sub)]
 s.append(passos([
     ("Abra o osu!", "Pode ser o stable ou o lazer."),
-    ("Comece a live no TikTok", "A live precisa estar <b>ao vivo</b> antes do próximo passo."),
-    ("Abra o LeitorChat.exe", "Digite o seu usuário do TikTok <b>sem o @</b> e aperte <b>Enter</b>. "
-                              "Ele abre o <b>tosu</b> sozinho, numa janela separada: deixe ela aberta durante a live."),
+    ("Abra o LeitorChat.exe", "Na <b>primeira vez</b>, digite o seu usuário do TikTok <b>sem o @</b> e aperte "
+                              "<b>Enter</b>. Ele fica guardado: das próximas vezes o programa entra sozinho em "
+                              "5 segundos. Ele abre o <b>tosu</b> sozinho, numa janela separada: deixe ela aberta "
+                              "durante a live."),
+    ("Comece a live no TikTok", "Pode ser antes ou depois de abrir o programa: se a live ainda não começou, "
+                                "ele espera e conecta sozinho."),
     ("Pronto!", "A voz fala “Conectado ao chat da live.” e começa a ler as mensagens. "
                 "Para mudar as configurações durante a live, abra <b>http://localhost:8765</b> no navegador (seção 8)."),
 ]))
+s.append(dica("Na contagem de 5 segundos ao abrir, aperte <b>T</b> para testar sem live ou <b>U</b> para "
+              "trocar de usuário. O usuário também pode ser trocado na página de configurações."))
 s.append(p("Para encerrar", h2))
 s.append(p(f"Na janela do programa, aperte <b>Ctrl+C</b>. Ele salva a planilha da live e mostra onde "
            f"ela ficou. Depois aperte <b>Enter</b> para fechar a janela."))
-s.append(atencao("Se aparecer <b>UserOfflineError</b>, a live ainda não está ao vivo ou o usuário "
-                 "foi digitado errado. Comece a live e abra o programa de novo."))
+s.append(dica("Se a conexão com a live cair, a voz avisa “Caiu a conexão com a live. Tentando voltar.” "
+              "e o programa volta sozinho (“Voltei a ler o chat da live.”). Não precisa fazer nada."))
+s.append(atencao("Se aparecer <b>Não achei a live de @fulano</b>, o usuário pode estar errado: troque na "
+                 "página de configurações e abra o programa de novo. Quem nunca fez live também vê essa "
+                 "mensagem até começar a primeira."))
 
 s.append(p("Como a voz lê o chat", h2))
 s += itens([
@@ -234,7 +242,7 @@ s += itens([
 
 s.append(p("Testando sem live", h2))
 s.append(p("Para experimentar a voz, os comandos e as configurações antes da live, abra o LeitorChat.exe "
-           f"e, no lugar do usuário do TikTok, digite <b>teste</b>. O programa não conecta no TikTok: "
+           f"e aperte <b>T</b> na contagem (ou, no lugar do usuário do TikTok, digite <b>teste</b>). O programa não conecta no TikTok: "
            "o que você digitar na janela entra como mensagem do chat."))
 s.append(tabela(["Você digita", "O que acontece"], [
     ["oi gente", "Mensagem sua. Você é o dono da live, então os comandos de moderação funcionam."],
@@ -381,12 +389,14 @@ s.append(p("Mandando os pedidos para o chat do osu!", h2))
 s.append(passos([
     ("Pegue a senha de IRC", "No site do osu!, clique no seu avatar, <b>Configurações</b>, e role até "
                              "<b>Legacy API</b>, parte <b>IRC</b>. Ela <b>não é</b> a senha da sua conta."),
-    ("Coloque no config.json", "Com o programa fechado, preencha <b>osu_usuario</b> com o seu nome no osu! e "
-                               "<b>osu_irc_senha</b> com a senha de IRC (seção 9)."),
+    ("Coloque na página", "Na página de configurações, seção <b>osu!</b>, preencha o seu nome no osu! e a "
+                          "<b>senha de IRC</b>, e clique em <b>Salvar</b>. Também dá para pôr no config.json "
+                          "(<b>osu_usuario</b> e <b>osu_irc_senha</b>, seção 9)."),
     ("Pronto", f"O próximo {cmd('!proximo')} já chega no seu chat do osu!."),
 ]))
 s.append(atencao("Não mostre a senha de IRC na live: com ela, qualquer um escreve no chat do osu! "
-                 "no seu nome. Por isso a página de configurações não mostra a senha. Se ela vazar, "
+                 "no seu nome. Por isso a página de configurações nunca mostra a senha salva: o campo fica em "
+                 "branco e só precisa ser preenchido para trocar. Se ela vazar, "
                  "gere outra no site do osu!."))
 s.append(dica("Se a senha estiver errada ou o osu! não responder, a janela do programa avisa e o "
               "pedido abre no navegador, como antes."))
@@ -395,6 +405,9 @@ s += itens([
     "Cada pessoa pode ter <b>um pedido por vez</b> na fila.",
     f"A fila aceita até <b>30 pedidos</b>. Você ou um moderador pode mudar com {cmd('!limitepedidos 20')}.",
     "A fila aparece no arquivo <b>pedidos.txt</b>, atualizado na hora. Dá para deixar aberto durante a live.",
+    "Para o público ver a fila na live: na página de configurações, clique em <b>Abrir janela da fila</b>. "
+    "No TikTok LIVE Studio, adicione uma <b>Captura de janela</b> da janela <b>Fila de pedidos</b>. Ela se "
+    "atualiza sozinha e pode ficar atrás do jogo, mas não minimizada.",
     "A fila <b>zera</b> quando o programa é fechado.",
 ])
 s.append(p("Sem fila: pedidos direto no osu!", h2))
@@ -582,6 +595,11 @@ s += itens([
 ])
 
 s.append(p("Todas as opções", h2))
+s.append(p("<b>Live</b>", rotulo))
+s.append(opcoes([
+    ("tiktok_usuario", "Seu usuário do TikTok, sem o @. É guardado na primeira vez que você digita."),
+]))
+s.append(Spacer(1, 8))
 s.append(p("<b>Voz e leitura do chat</b>", rotulo))
 s.append(opcoes([
     ("voz", "Qual voz fala. Opções: <b>\"pt-BR-FranciscaNeural\"</b> (feminina), "

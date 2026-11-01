@@ -11,13 +11,18 @@ ANTES DE TUDO
 
 COMO USAR EM CADA LIVE
   1. Abra o osu!
-  2. Comece a live no TikTok
-  3. Abra o LeitorChat.exe e digite seu usuário do TikTok, sem o @
+  2. Abra o LeitorChat.exe. Na primeira vez, digite seu usuário do TikTok, sem o @.
+     Ele fica guardado: das próximas vezes o programa entra sozinho em 5 segundos.
      (ele abre o tosu sozinho, numa janela separada, se ainda não estiver aberto)
+  3. Comece a live no TikTok (antes ou depois de abrir o programa, tanto faz)
+
+  Se a live ainda não começou, o programa espera e conecta sozinho.
+  Se a conexão cair no meio da live, ele avisa pela voz e volta sozinho.
 
   Para encerrar: Ctrl+C na janela do programa e depois Enter.
 
-  Para testar sem estar ao vivo, digite "teste" no lugar do usuário.
+  Para testar sem estar ao vivo, aperte T na contagem ao abrir
+  (ou digite "teste" no lugar do usuário). Para trocar de usuário, aperte U.
   O que você digitar na janela entra como mensagem do chat
   ("Fulano: oi" manda como outra pessoa; "sair" fecha).
 
@@ -84,6 +89,7 @@ CONFIGURAÇÕES
   a página pelo celular.
 
   O que é cada opção do config.json:
+  tiktok_usuario         seu usuário do TikTok, sem @ (guardado na primeira vez que você digita)
   voz                    voz que fala: "pt-BR-FranciscaNeural", "pt-BR-ThalitaMultilingualNeural",
                          "pt-BR-AntonioNeural", "pt-PT-RaquelNeural", "pt-PT-DuarteNeural"
                          ou "windows" (funciona sem internet)
@@ -106,7 +112,7 @@ CONFIGURAÇÕES
   avisar_recorde         true: fala quando você bate o recorde de PP da live
   osu_usuario            seu nome no osu! (para o !proximo mandar o pedido no seu chat do osu!)
   osu_irc_senha          senha de IRC, NÃO a da conta: osu.ppy.sh > Configurações > Legacy API.
-                         Só dá para mudar no config.json, a página não mostra
+                         Também dá para trocar na página (ela nunca mostra a salva)
   web_porta              porta da página de configurações (0 desliga). Vale ao reabrir
   web_rede_local         true: a página abre também no celular/outro PC da mesma rede.
                          Vale ao reabrir
@@ -126,7 +132,8 @@ ARQUIVOS
   config.json   as suas configurações
   registros\    planilhas de cada live (quem entrou e quantas mensagens mandou)
   apelidos.txt  apelidos que a voz usa
-  pedidos.txt   fila de pedidos de mapas
+  pedidos.txt   fila de pedidos de mapas (para mostrar na live: botão "Abrir janela da fila"
+                na página de configurações + Captura de janela no TikTok LIVE Studio)
 
 
 ATUALIZAR PARA UMA VERSÃO NOVA
