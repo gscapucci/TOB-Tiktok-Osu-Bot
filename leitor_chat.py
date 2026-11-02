@@ -91,6 +91,8 @@ OSU_IRC_SENHA = ""
 # Página de configurações (estas duas só valem quando o programa abre de novo)
 WEB_PORTA = 8765        # http://localhost:8765 ; 0 desliga a página
 WEB_REDE_LOCAL = False  # True: abre também no celular/outro PC da mesma rede (qualquer um nela pode mexer)
+ABRIR_PAGINA = True     # abrir a página no navegador quando o programa começa
+JANELA_PEDIDOS = False  # abrir a janela "Fila de pedidos" junto com o programa (Captura de janela, se o link não der)
 # ------------------------------------------------
 
 fila: "queue.Queue[str]" = queue.Queue()
@@ -105,7 +107,7 @@ ARQUIVO_CONFIG = os.path.join(PASTA, "config.json")
 OPCOES = {nome.lower(): nome for nome in (
     "TIKTOK_USUARIO", "VOZ", "VELOCIDADE", "VOLUME", "LER_NOME", "TAMANHO_MAXIMO", "FILA_MAXIMA", "PALAVRAS_BLOQUEADAS",
     "PREFIXO", "MODERADORES", "ESPERA_COMANDO", "PEDIDOS_MAXIMOS", "FILA_PEDIDOS", "COMANDOS_DESATIVADOS",
-    "TOSU_URL", "AVISAR_MAPA", "AVISAR_RECORDE", "OSU_USUARIO", "OSU_IRC_SENHA", "WEB_PORTA", "WEB_REDE_LOCAL")}
+    "TOSU_URL", "AVISAR_MAPA", "AVISAR_RECORDE", "OSU_USUARIO", "OSU_IRC_SENHA", "WEB_PORTA", "WEB_REDE_LOCAL", "ABRIR_PAGINA", "JANELA_PEDIDOS")}
 SECRETAS = ("osu_irc_senha",)  # a página nunca mostra: só diz se tem uma salva e deixa trocar
 LIMITES = {"VELOCIDADE": (-10, 10), "VOLUME": (0, 100), "TAMANHO_MAXIMO": (1, None), "FILA_MAXIMA": (1, None),
            "ESPERA_COMANDO": (0, None), "PEDIDOS_MAXIMOS": (1, None), "WEB_PORTA": (0, 65535)}
@@ -679,6 +681,43 @@ APELIDOS_COMANDO = {
     "fechar": "fecharpedidos", "abrir": "abrirpedidos", "zerar": "zerarpedidos", "limite": "limitepedidos",
 }
 TODOS_COMANDOS = ["comandos"] + COMANDOS_PUBLICOS + COMANDOS_MOD + COMANDOS_DONO
+# o que cada comando faz (mostrado na página de configurações)
+DESCRICAO_COMANDO = {
+    "comandos": "Fala a lista de comandos ligados. Para você e os mods, fala os de moderação.",
+    "np": "Fala o mapa que você está jogando: música, dificuldade, estrelas e mods.",
+    "pp": "Fala quanto PP vale o SS do mapa atual com os mods selecionados, e também com 98% e 95%.",
+    "rank": "Fala o seu rank global, o PP e a precisão.",
+    "recorde": "Fala o maior PP que você fez nesta live e em qual mapa.",
+    "pedir": "Pede um mapa: pelo link, pelo nome, pelo código do set (123456) ou da dificuldade (d1234567).",
+    "pedidos": "Fala quantos pedidos tem na fila e a posição de quem perguntou.",
+    "mensagens": "Fala quantas mensagens a pessoa mandou nesta live.",
+    "top": "Fala as 3 pessoas que mais mandaram mensagem na live.",
+    "copiar": "Copia o texto para o seu Ctrl+C. Qualquer pessoa pode trocar o que você copiou.",
+    "mudo": "Para de ler o chat e apaga o que estava esperando. Respostas e avisos também param.",
+    "voltar": "Volta a ler o chat depois do !mudo.",
+    "limpar": "Apaga as mensagens que estavam esperando para serem lidas.",
+    "apelido": "Dá um apelido para alguém (ex.: apelido fulano Aninha). A voz passa a chamar a pessoa assim.",
+    "velocidade": "Muda a velocidade da voz, de -10 a 10.",
+    "volume": "Muda o volume da voz, de 0 a 100.",
+    "voz": "Troca a voz: francisca, thalita, antonio, raquel, duarte ou maria. Sem nome, fala a lista.",
+    "nomes": "Liga ou desliga o \"Fulano disse:\" antes das mensagens.",
+    "bloquear": "Bloqueia uma palavra: mensagens com ela não são lidas em voz alta.",
+    "desbloquear": "Desbloqueia uma palavra.",
+    "ligar": "Religa um comando desligado (nome sem o símbolo).",
+    "desligar": "Desliga um comando (nome sem o símbolo). O ligar e o desligar não podem ser desligados pelo chat.",
+    "avisos": "Com mapa ou recorde, liga ou desliga esse aviso. Sozinho, fala como os avisos estão.",
+    "espera": "Muda quantos segundos cada pessoa espera entre um comando e outro (anti-spam).",
+    "tamanho": "Muda quantas letras de cada mensagem são lidas.",
+    "fila": "Muda quantas mensagens podem ficar esperando a voz.",
+    "proximo": "Manda o próximo pedido no seu chat do osu! (ou abre no navegador) e fala de quem é.",
+    "fecharpedidos": "Para de aceitar pedidos.",
+    "abrirpedidos": "Volta a aceitar pedidos.",
+    "zerarpedidos": "Apaga a fila de pedidos inteira.",
+    "limitepedidos": "Muda o tamanho máximo da fila de pedidos.",
+    "filapedidos": "Liga ou desliga a fila. Desligada, cada pedido vai direto para o seu chat do osu!.",
+    "mod": "Torna alguém moderador (usuário do TikTok, sem @).",
+    "desmod": "Tira alguém dos moderadores.",
+}
 PROTEGIDOS = ("ligar", "desligar")  # se desligar estes pelo chat, não daria para religar pelo chat
 
 
@@ -1000,13 +1039,25 @@ class PaginaConfig(http.server.BaseHTTPRequestHandler):
 
     def dados_da_pagina(self) -> dict:
         config = {k: v for k, v in config_atual().items() if k not in SECRETAS}
-        return {"config": config, "comandos": TODOS_COMANDOS,
-                "apelidos": APELIDOS_COMANDO, "senha_salva": bool(OSU_IRC_SENHA.strip())}
+        atalhos = {}
+        for atalho, cmd in APELIDOS_COMANDO.items():
+            atalhos.setdefault(cmd, []).append(atalho)
+
+        def grupo(titulo, cmds):
+            return {"titulo": titulo, "comandos": [{"cmd": c, "descricao": DESCRICAO_COMANDO.get(c, ""),
+                                                    "atalhos": atalhos.get(c, [])} for c in cmds]}
+        return {"config": config, "comandos": TODOS_COMANDOS, "apelidos": APELIDOS_COMANDO,
+                "grupos": [grupo("Todo mundo", ["comandos"] + COMANDOS_PUBLICOS),
+                           grupo("Você e os moderadores", COMANDOS_MOD),
+                           grupo("Só você", COMANDOS_DONO)],
+                "senha_salva": bool(OSU_IRC_SENHA.strip())}
 
     def do_GET(self):
-        if not self.host_ok():
-            return self.responder(403, "text/plain; charset=utf-8", b"acesso negado")
         caminho = urllib.parse.urlsplit(self.path).path.rstrip("/") or "/"
+        # a fila só mostra o que já aparece na live, então aceita qualquer nome (o LIVE Studio
+        # recusa "localhost" e precisa de um como localtest.me, que aponta para este computador)
+        if not self.host_ok() and caminho not in ("/pedidos", "/api/pedidos"):
+            return self.responder(403, "text/plain; charset=utf-8", b"acesso negado")
         if caminho == "/":
             self.responder(200, "text/html; charset=utf-8", PAGINA.encode("utf-8"))
         elif caminho == "/api/config":
@@ -1114,27 +1165,74 @@ setInterval(atualizar, 2000);
 """
 
 
-def abrir_janela_pedidos() -> str:
-    """Abre a fila de pedidos numa janela própria do Edge (sem barra de endereço nem abas), para a
-    Captura de janela do TikTok LIVE Studio. Devolve "" se abriu, senão o motivo."""
-    if not WEB_PORTA:
-        return "a página está desligada (web_porta 0)"
-    url = f"http://127.0.0.1:{WEB_PORTA}/pedidos"
-    for base in (os.environ.get("ProgramFiles(x86)"), os.environ.get("ProgramFiles")):
-        edge = os.path.join(base or "", "Microsoft", "Edge", "Application", "msedge.exe")
-        if base and os.path.exists(edge):
-            break
-    else:
-        webbrowser.open(url)  # sem Edge: abre no navegador padrão, numa aba comum
-        return ""
-    # perfil separado: assim a janela abre do tamanho certo mesmo com o Edge já aberto
-    perfil = os.path.join(os.environ.get("LOCALAPPDATA") or PASTA, "LeitorChat", "janela-pedidos")
+TITULO_JANELA = "Fila de pedidos"  # não mude: o LIVE Studio acha a janela pelo nome
+janela_thread = None  # a janela roda na própria thread (o tkinter só pode ser usado por uma thread)
+
+
+def texto_do_pedido(t: str) -> str:
+    t = t.strip()
+    return "#" + t if re.fullmatch(r"d?\s*\d+", t, re.IGNORECASE) else t
+
+
+def rodar_janela_pedidos():
+    """Janela "Fila de pedidos": fundo preto, letras brancas, atualiza sozinha. Abre atrás das outras
+    janelas (não tira o foco do jogo) e fecha junto com o programa."""
     try:
-        subprocess.Popen([edge, f"--app={url}", "--window-size=520,420", f"--user-data-dir={perfil}",
-                          "--no-first-run", "--no-default-browser-check"])
-    except OSError as e:
-        return f"não consegui abrir o Edge ({e})"
-    print("[janela da fila de pedidos aberta: use Captura de janela no TikTok LIVE Studio]")
+        import tkinter as tk
+    except ImportError:
+        print("[a janela da fila de pedidos não está disponível neste computador]")
+        return
+    raiz = tk.Tk()
+    raiz.title(TITULO_JANELA)
+    raiz.geometry("520x380")
+    raiz.configure(bg="#000")
+    titulo = tk.Label(raiz, bg="#000", fg="#fff", font=("Segoe UI", 20, "bold"), anchor="w")
+    titulo.pack(fill="x", padx=18, pady=(12, 4))
+    lista = tk.Frame(raiz, bg="#000")
+    lista.pack(fill="both", expand=True, padx=18)
+    mostrado = None
+
+    def linha(pos, mapa, quem):
+        f = tk.Frame(lista, bg="#000")
+        f.pack(fill="x", pady=1)
+        tk.Label(f, text=pos, width=3, anchor="w", bg="#000", fg="#fff", font=("Segoe UI", 17, "bold")).pack(side="left")
+        tk.Label(f, text=mapa, anchor="w", bg="#000", fg="#fff", font=("Segoe UI", 17, "bold")).pack(side="left")
+        if quem:
+            tk.Label(f, text=quem, anchor="w", bg="#000", fg="#fff", font=("Segoe UI", 12)).pack(side="left", padx=(10, 0))
+
+    def atualizar():
+        nonlocal mostrado
+        fila_agora = [(x["nome"], x["texto"]) for x in list(pedidos)]
+        estado = (tuple(fila_agora), pedidos_abertos, FILA_PEDIDOS, PREFIXO)
+        if estado != mostrado:
+            mostrado = estado
+            n = len(fila_agora)
+            extra = " (direto no osu!)" if not FILA_PEDIDOS else " (fechados)" if not pedidos_abertos \
+                else f" ({n})" if n else ""
+            titulo.config(text="Pedidos" + extra)
+            for filho in lista.winfo_children():
+                filho.destroy()
+            for i, (nome, texto) in enumerate(fila_agora[:5], 1):
+                linha(f"{i}.", texto_do_pedido(texto), nome)
+            if n > 5:
+                linha("", f"+ {n - 5} na fila", "")
+            elif n == 0 and FILA_PEDIDOS and pedidos_abertos:
+                linha("", f"Peça com {PREFIXO}pedir", "")
+        raiz.after(1000, atualizar)
+
+    atualizar()
+    raiz.after(300, raiz.lower)  # vai para trás das outras janelas: não atrapalha o jogo
+    print(f"[janela \"{TITULO_JANELA}\" aberta: no TikTok LIVE Studio, use Captura de janela nela (só na primeira vez)]")
+    raiz.mainloop()
+
+
+def abrir_janela_pedidos() -> str:
+    """Abre a janela da fila, se ela ainda não estiver aberta. Devolve "" se deu certo."""
+    global janela_thread
+    if janela_thread is not None and janela_thread.is_alive():
+        return ""
+    janela_thread = threading.Thread(target=rodar_janela_pedidos, daemon=True)
+    janela_thread.start()
     return ""
 
 
@@ -1161,6 +1259,8 @@ def iniciar_pagina():
         return
     threading.Thread(target=servidor.serve_forever, daemon=True).start()
     print(f"Página de configurações: http://localhost:{WEB_PORTA}")
+    if ABRIR_PAGINA:
+        webbrowser.open(f"http://localhost:{WEB_PORTA}")
     if WEB_REDE_LOCAL:
         print(f"  no celular ou outro PC da mesma rede: http://{ip_local()}:{WEB_PORTA}")
     print()
@@ -1195,8 +1295,12 @@ label.check input { margin-top: 4px; }
 .faixa { display: flex; gap: 10px; align-items: center; }
 .faixa input { flex: 1; }
 .faixa output { min-width: 3ch; text-align: right; font-variant-numeric: tabular-nums; }
-.cmds { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 4px 12px; margin-top: 8px; }
-.cmds label { font-weight: 400; margin: 0; display: flex; gap: 6px; align-items: center; }
+.cmds h3 { font-size: 14px; margin: 14px 0 2px; color: var(--suave); text-transform: uppercase; letter-spacing: .04em; }
+.cmds label { font-weight: 400; margin: 0; display: flex; gap: 8px; align-items: flex-start; padding: 6px 0;
+  border-top: 1px solid var(--borda); }
+.cmds label input { margin-top: 4px; }
+.cmds code { font-weight: 700; font-size: 15px; }
+.cmds .atalhos { color: var(--suave); font-size: 13px; }
 .barra { position: fixed; left: 0; right: 0; bottom: 0; background: var(--cartao); border-top: 1px solid var(--borda);
   padding: 12px 16px; display: flex; gap: 10px; align-items: center; justify-content: center; flex-wrap: wrap; }
 button { font: inherit; padding: 9px 18px; border-radius: 6px; border: 1px solid var(--borda); background: var(--fundo);
@@ -1219,7 +1323,7 @@ button.principal { background: var(--destaque); border-color: var(--destaque); c
 
   <section>
     <h2>Voz</h2>
-    <label for="voz">Voz</label>
+    <label for="voz">Voz<small>Quem lê o chat. As neurais precisam de internet e soam mais naturais. No chat: !voz antonio.</small></label>
     <select id="voz">
       <option value="pt-BR-FranciscaNeural">Francisca (feminina)</option>
       <option value="pt-BR-ThalitaMultilingualNeural">Thalita (feminina)</option>
@@ -1228,54 +1332,57 @@ button.principal { background: var(--destaque); border-color: var(--destaque); c
       <option value="pt-PT-DuarteNeural">Duarte (masculina, Portugal)</option>
       <option value="windows">Maria do Windows (funciona sem internet)</option>
     </select>
-    <label for="velocidade">Velocidade</label>
+    <label for="velocidade">Velocidade<small>De -10 (bem lenta) a 10 (bem rápida). No chat: !velocidade 5 ou !vel 5.</small></label>
     <div class="faixa"><input type="range" id="velocidade" min="-10" max="10" step="1"><output for="velocidade"></output></div>
-    <label for="volume">Volume</label>
+    <label for="volume">Volume<small>Volume da voz, de 0 a 100. No chat: !volume 70 ou !vol 70.</small></label>
     <div class="faixa"><input type="range" id="volume" min="0" max="100" step="1"><output for="volume"></output></div>
   </section>
 
   <section>
     <h2>Leitura do chat</h2>
-    <label class="check"><input type="checkbox" id="ler_nome"><span>Falar o nome antes da mensagem<small>"Fulano disse: ..."</small></span></label>
-    <label for="tamanho_maximo">Tamanho máximo da mensagem<small>Letras; o resto é cortado.</small></label>
+    <label class="check"><input type="checkbox" id="ler_nome"><span>Falar o nome antes da mensagem<small>Ligado: "Fulano disse: mensagem". Desligado: só a mensagem. No chat: !nomes.</small></span></label>
+    <label for="tamanho_maximo">Tamanho máximo da mensagem<small>Quantas letras de cada mensagem são lidas; o resto é cortado. No chat: !tamanho 150.</small></label>
     <input type="number" id="tamanho_maximo" min="1">
-    <label for="fila_maxima">Tamanho da fila de fala<small>Se o chat estiver rápido demais, as mensagens mais antigas são puladas.</small></label>
+    <label for="fila_maxima">Tamanho da fila de fala<small>Quantas mensagens podem esperar a voz. Se o chat passar disso, as mais antigas são puladas para a voz não ficar atrasada. No chat: !fila 10.</small></label>
     <input type="number" id="fila_maxima" min="1">
-    <label for="palavras_bloqueadas">Palavras bloqueadas<small>Uma por linha. Mensagens com elas não são lidas.</small></label>
+    <label for="palavras_bloqueadas">Palavras bloqueadas<small>Uma por linha. Mensagens com elas não são lidas em voz alta, e pedidos com elas são recusados. No chat: !bloquear palavra.</small></label>
     <textarea id="palavras_bloqueadas"></textarea>
   </section>
 
   <section>
     <h2>Comandos</h2>
-    <label for="prefixo">Prefixo<small>O símbolo antes dos comandos.</small></label>
+    <label for="prefixo">Prefixo<small>O símbolo que marca um comando no começo da mensagem (o "!" de !pedir). Só muda por aqui ou pelo config.json.</small></label>
     <input type="text" id="prefixo" maxlength="5">
-    <label for="moderadores">Moderadores<small>Usuários do TikTok, sem @, um por linha. Podem usar os comandos de moderação.</small></label>
+    <label for="moderadores">Moderadores<small>Usuários do TikTok, sem @, um por linha. Podem usar os comandos de moderação e não têm a espera entre comandos. No chat (só você): !mod usuario.</small></label>
     <textarea id="moderadores"></textarea>
-    <label for="espera_comando">Espera entre comandos (segundos)<small>Anti-spam: quanto cada pessoa espera entre um comando e outro.</small></label>
+    <label for="espera_comando">Espera entre comandos (segundos)<small>Anti-spam: quanto cada pessoa espera entre um comando e outro. Comandos a mais são ignorados. Não vale para você e os mods. No chat: !espera 10.</small></label>
     <input type="number" id="espera_comando" min="0">
-    <label>Comandos ligados<small>Desmarque para desligar um comando.</small></label>
+    <label>Comandos ligados<small>Desmarque para desligar um comando (e os atalhos dele). Desligado, ele é
+      ignorado em silêncio e sai do !comandos.</small></label>
     <div class="cmds" id="cmds"></div>
   </section>
 
   <section>
     <h2>Pedidos de mapas</h2>
-    <p class="sub" style="margin:4px 0 8px">Para mostrar a fila na live pelo TikTok LIVE Studio: clique no botão,
-      e no LIVE Studio adicione uma <b>Captura de janela</b> da janela “Fila de pedidos”. Deixe a janela aberta
-      (pode ficar atrás do jogo, mas não minimizada).</p>
-    <button type="button" id="janela_pedidos">Abrir janela da fila</button>
-    <small style="margin-top:6px">No OBS e parecidos: fonte de navegador com <b id="link_pedidos"></b>.
-      <code>?max=3</code> no fim mostra só os 3 primeiros.</small>
-    <label for="pedidos_maximos">Tamanho máximo da fila de pedidos</label>
+    <p class="sub" style="margin:4px 0 8px"><b>Fila na live, com fundo transparente:</b> só na primeira vez, no TikTok
+      LIVE Studio, adicione uma fonte de <b>link</b> (página da web) com <b id="link_studio"></b>. Nas próximas lives ela
+      já aparece sozinha. No OBS: fonte de navegador com <b id="link_pedidos"></b>.
+      <code>?max=3</code> no fim mostra só os 3 primeiros.</p>
+    <label class="check"><input type="checkbox" id="janela_pedidos"><span>Abrir a janela da fila junto com o programa
+      <small>Só se a fonte de link não funcionar: a janela “Fila de pedidos” (fundo preto) abre atrás das outras, e no
+      LIVE Studio você adiciona uma <b>Captura de janela</b> dela. Não minimize a janela.</small></span></label>
+    <button type="button" id="mostrar_janela">Mostrar a janela da fila</button>
+    <label for="pedidos_maximos">Tamanho máximo da fila de pedidos<small>Com a fila cheia, novos pedidos são recusados. No chat: !limitepedidos 20.</small></label>
     <input type="number" id="pedidos_maximos" min="1">
     <label class="check"><input type="checkbox" id="fila_pedidos"><span>Usar fila de pedidos<small>Desligado: cada pedido vai direto
-      para o seu chat do osu! (precisa do nome e da senha de IRC) e a voz não anuncia.</small></span></label>
+      para o seu chat do osu! (precisa do nome e da senha de IRC) e a voz não anuncia. No chat: !filapedidos.</small></span></label>
   </section>
 
   <section>
     <h2>osu!</h2>
-    <label class="check"><input type="checkbox" id="avisar_mapa"><span>Avisar mapa novo<small>Fala "Agora: Artista - Música" quando você começa um mapa.</small></span></label>
-    <label class="check"><input type="checkbox" id="avisar_recorde"><span>Avisar recorde de PP da live</span></label>
-    <label for="tosu_url">Endereço do tosu<small>Só mude se tiver mudado no tosu.</small></label>
+    <label class="check"><input type="checkbox" id="avisar_mapa"><span>Avisar mapa novo<small>Fala "Agora: Artista - Música" quando você começa um mapa. No chat: !avisos mapa.</small></span></label>
+    <label class="check"><input type="checkbox" id="avisar_recorde"><span>Avisar recorde de PP da live<small>Fala quando você bate o maior PP desta live. No chat: !avisos recorde.</small></span></label>
+    <label for="tosu_url">Endereço do tosu<small>De onde o programa lê os dados do osu! (!np, !pp, !rank, avisos). Só mude se tiver mudado no tosu.</small></label>
     <input type="text" id="tosu_url">
     <label for="osu_usuario">Seu nome no osu!<small>Com ele e a senha de IRC, o !proximo manda o pedido no seu chat do osu!.
 </small></label>
@@ -1288,7 +1395,8 @@ button.principal { background: var(--destaque); border-color: var(--destaque); c
 
   <section>
     <h2>Esta página</h2>
-    <p class="sub" style="margin:4px 0 0">Estas duas só valem quando o programa abre de novo.</p>
+    <p class="sub" style="margin:4px 0 0">Estas valem quando o programa abre de novo.</p>
+    <label class="check"><input type="checkbox" id="abrir_pagina"><span>Abrir esta página sozinha<small>Abre no navegador quando o programa começa.</small></span></label>
     <label for="web_porta">Porta<small>0 desliga a página.</small></label>
     <input type="number" id="web_porta" min="0" max="65535">
     <label class="check"><input type="checkbox" id="web_rede_local"><span>Abrir na rede local<small>Para mexer pelo celular. Qualquer pessoa no mesmo Wi-Fi também vai conseguir.</small></span></label>
@@ -1332,12 +1440,21 @@ function preencher(d) {
     x = x.replace(/^!+/, "").toLowerCase();
     return apelidos[x] || x;
   }));
-  $("cmds").replaceChildren(...comandos.map(cmd => {
-    const l = document.createElement("label"), i = document.createElement("input");
-    i.type = "checkbox"; i.value = cmd; i.checked = !desligados.has(cmd);
-    l.append(i, c.prefixo + cmd);
+  const el = (tag, classe, texto) => {
+    const e = document.createElement(tag);
+    if (classe) e.className = classe;
+    if (texto) e.textContent = texto;
+    return e;
+  };
+  $("cmds").replaceChildren(...d.grupos.flatMap(g => [el("h3", "", g.titulo), ...g.comandos.map(x => {
+    const l = el("label"), i = el("input"), texto = el("span");
+    i.type = "checkbox"; i.value = x.cmd; i.checked = !desligados.has(x.cmd);
+    texto.append(el("code", "", c.prefixo + x.cmd));
+    if (x.atalhos.length) texto.append(" ", el("span", "atalhos", "(atalho: " + x.atalhos.map(a => c.prefixo + a).join(", ") + ")"));
+    texto.append(el("small", "", x.descricao));
+    l.append(i, texto);
     return l;
-  }));
+  })]));
   $("osu_irc_senha").value = "";
   $("osu_irc_senha").placeholder = d.senha_salva ? "•••••••• (salva)" : "";
   $("senha_estado").textContent = d.senha_salva ? "Tem uma senha salva." : "Nenhuma senha salva ainda.";
@@ -1387,11 +1504,12 @@ async function salvar() {
 
 document.addEventListener("input", e => { if (e.target.type === "range") atualizarFaixas(); });
 $("link_pedidos").textContent = location.origin + "/pedidos?transparente";
-$("janela_pedidos").onclick = async () => {
+$("link_studio").textContent = "http://localtest.me:" + (location.port || 80) + "/pedidos?transparente";
+$("mostrar_janela").onclick = async () => {
   try {
     const r = await fetch("/api/janela-pedidos", {method: "POST", headers: {"Content-Type": "application/json"}, body: "{}"});
     const d = await r.json();
-    status(d.erro ? "Não abriu: " + d.erro : "Janela da fila aberta.", !!d.erro);
+    status(d.erro ? "Não abriu: " + d.erro : "A janela da fila está aberta (veja na barra de tarefas).", !!d.erro);
   } catch (e) {
     status("Não consegui falar com o programa. Ele está aberto?", true);
   }
@@ -1563,6 +1681,8 @@ def main():
     atexit.register(fechar_irc)  # sai do chat do osu! direitinho ao fechar
     salvar_pedidos()  # a fila começa vazia: o pedidos.txt não pode continuar mostrando a da live anterior
     usuario = escolher_usuario()
+    if JANELA_PEDIDOS:
+        abrir_janela_pedidos()
     if usuario.lower() in ("teste", "--teste"):
         threading.Thread(target=narrador, daemon=True).start()
         threading.Thread(target=vigia_osu, daemon=True).start()

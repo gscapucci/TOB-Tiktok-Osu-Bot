@@ -86,8 +86,11 @@ qualquer lugar, sem precisar de nada instalado.
 
 ### B) Pela página de configurações (vale na hora e para sempre)
 
-Com o programa aberto, abra **http://localhost:8765** no navegador. Lá estão
-todas as opções do `config.json`; ao clicar em **Salvar**, elas já valem na
+A página **abre sozinha no navegador** quando o programa começa (para não abrir,
+desmarque "Abrir esta página sozinha" ou use `"abrir_pagina": false`). Se fechar,
+é só abrir **http://localhost:8765**. Lá estão todas as opções do `config.json`,
+cada uma com a explicação do que faz, e a lista de todos os comandos com o que
+cada um faz e os atalhos. Ao clicar em **Salvar**, as mudanças já valem na
 live (sem reabrir o programa) e ficam gravadas no `config.json`.
 
 - Para mexer pelo **celular**, ligue `web_rede_local` (na própria página ou no
@@ -333,12 +336,16 @@ O chat pede mapas, eles entram numa fila e você abre um de cada vez.
 - No **lazer**: baixe o mapa no site (logado) e dê dois cliques no `.osz`.
 - Cada pessoa pode ter **um pedido por vez** na fila.
 - A fila fica visível no arquivo **`pedidos.txt`**, atualizado na hora.
-- **Fila na tela da live:** na página de configurações, seção Pedidos de mapas, clique em
-  **Abrir janela da fila**. Abre uma janela pequena "Fila de pedidos" (fundo preto, letras brancas)
-  com os próximos pedidos, que se atualiza sozinha. No **TikTok LIVE Studio**, adicione uma
-  **Captura de janela** dessa janela. Ela pode ficar atrás do jogo, mas não minimizada.
-  (O LIVE Studio não aceita o endereço do próprio PC numa fonte de link.)
+- **Fila na tela da live (fundo transparente):** **só na primeira vez**, no **TikTok LIVE Studio**,
+  adicione uma fonte de **link** (página da web) com `http://localtest.me:8765/pedidos?transparente`
+  (troque 8765 se mudou a `web_porta`; o endereço certo aparece na página de configurações). Ela mostra
+  os 5 próximos pedidos e se atualiza sozinha; nas próximas lives já aparece com o programa aberto.
+  O LIVE Studio recusa `localhost`; `localtest.me` é um nome público que aponta para o seu próprio
+  computador, e por ele só a fila abre (a página de configurações não).
   No OBS e parecidos: fonte de navegador com `http://localhost:8765/pedidos?transparente`.
+- **Se a fonte de link não funcionar:** marque `"janela_pedidos": true` (ou a opção na página) e o
+  programa abre a janela **"Fila de pedidos"** (fundo preto, letras brancas), atrás das outras janelas.
+  No LIVE Studio, adicione uma **Captura de janela** dela (só na primeira vez). Não minimize a janela.
   `?max=3` no fim do endereço mostra só os 3 primeiros.
 - A fila **zera** quando o programa é fechado.
 - **Sem fila** (`!filapedidos` ou `"fila_pedidos": false`): cada `!pedir` vai na hora para o seu chat do
@@ -431,7 +438,7 @@ configurações. Os comandos de chat que mudam uma configuração gravam no
 | Tamanho das mensagens lidas | `!tamanho N` | `"tamanho_maximo": N` |
 | Fila de fala | `!fila N` | `"fila_maxima": N` |
 | Tamanho da fila de pedidos | `!limitepedidos N` | `"pedidos_maximos": N` |
-| Prefixo, tosu, página | — | `"prefixo"`, `"tosu_url"`, `"web_porta"`, `"web_rede_local"` |
+| Prefixo, tosu, página | — | `"prefixo"`, `"tosu_url"`, `"web_porta"`, `"web_rede_local"`, `"abrir_pagina"` |
 
 ---
 

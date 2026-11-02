@@ -116,6 +116,10 @@ CONFIGURAÇÕES
   web_porta              porta da página de configurações (0 desliga). Vale ao reabrir
   web_rede_local         true: a página abre também no celular/outro PC da mesma rede.
                          Vale ao reabrir
+  janela_pedidos         true: abre a janela "Fila de pedidos" junto com o programa
+                         (só se a fonte de link do LIVE Studio não funcionar)
+  abrir_pagina           true: abre a página de configurações no navegador quando o
+                         programa começa
 
   No config.json: textos entre aspas, true/false em minúsculo, vírgula no fim
   de cada linha menos a última, e nada de comentários.
@@ -132,8 +136,9 @@ ARQUIVOS
   config.json   as suas configurações
   registros\    planilhas de cada live (quem entrou e quantas mensagens mandou)
   apelidos.txt  apelidos que a voz usa
-  pedidos.txt   fila de pedidos de mapas (para mostrar na live: botão "Abrir janela da fila"
-                na página de configurações + Captura de janela no TikTok LIVE Studio)
+  pedidos.txt   fila de pedidos de mapas. Para mostrar na live com fundo transparente:
+                no TikTok LIVE Studio, adicione uma fonte de link com
+                http://localtest.me:8765/pedidos?transparente (só na primeira vez)
 
 
 ATUALIZAR PARA UMA VERSÃO NOVA
