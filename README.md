@@ -24,7 +24,7 @@ e se conecta ao osu! (via tosu) para falar sobre o mapa, o PP e o seu perfil.
 
 1. Abra o **osu!**
 2. Abra o **LeitorChat.exe** (ou o `iniciar.bat`). Na primeira vez, digite seu usuário do TikTok,
-   sem o @: ele fica guardado e, das próximas vezes, o programa entra sozinho depois de 5 segundos
+   sem o @, na janela ou na página de configurações (a que abrir primeiro vale): ele fica guardado e, das próximas vezes, o programa entra sozinho depois de 5 segundos
    (nessa contagem, **T** abre o modo de teste e **U** troca de usuário)
 3. **Comece a live** no TikTok, antes ou depois de abrir o programa, tanto faz
 

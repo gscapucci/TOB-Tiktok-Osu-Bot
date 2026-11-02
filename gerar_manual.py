@@ -210,7 +210,7 @@ s += [PageBreak(), p("3. Passo a passo de cada live", h1),
 s.append(passos([
     ("Abra o osu!", "Pode ser o stable ou o lazer."),
     ("Abra o LeitorChat.exe", "Na <b>primeira vez</b>, digite o seu usuário do TikTok <b>sem o @</b> e aperte "
-                              "<b>Enter</b>. Ele fica guardado: das próximas vezes o programa entra sozinho em "
+                              "<b>Enter</b> (ou preencha na página de configurações, que abre junto). Ele fica guardado: das próximas vezes o programa entra sozinho em "
                               "5 segundos. Ele abre o <b>tosu</b> sozinho, numa janela separada: deixe ela aberta "
                               "durante a live."),
     ("Comece a live no TikTok", "Pode ser antes ou depois de abrir o programa: se a live ainda não começou, "

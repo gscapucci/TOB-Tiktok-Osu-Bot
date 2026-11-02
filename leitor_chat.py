@@ -1171,9 +1171,14 @@ def ip_local() -> str:
             return "IP-deste-PC"
 
 
+pagina_iniciada = False
+
+
 def iniciar_pagina():
-    if not WEB_PORTA:
+    global pagina_iniciada
+    if not WEB_PORTA or pagina_iniciada:
         return
+    pagina_iniciada = True
     endereco = "0.0.0.0" if WEB_REDE_LOCAL else "127.0.0.1"
     try:
         servidor = http.server.ThreadingHTTPServer((endereco, WEB_PORTA), PaginaConfig)
@@ -1261,7 +1266,7 @@ button.principal { background: var(--destaque); border-color: var(--destaque); c
 
   <section>
     <h2>Live</h2>
-    <label for="tiktok_usuario">Seu usuário do TikTok<small>Sem o @. Vale quando o programa abre de novo.</small></label>
+    <label for="tiktok_usuario">Seu usuário do TikTok<small>Sem o @. Se o programa estiver pedindo o usuário, entra na hora; senão, vale quando ele abre de novo.</small></label>
     <input type="text" id="tiktok_usuario" autocomplete="off" spellcheck="false">
   </section>
 
@@ -1553,13 +1558,55 @@ def escolher_usuario() -> str:
             return "teste"
         if tecla != "u":
             return TIKTOK_USUARIO
+    # a página abre já aqui, para dar para digitar o usuário nela também
+    anterior = TIKTOK_USUARIO
+    iniciar_pagina()
     usuario = ""
     while not usuario:
-        usuario = input("Seu usuário do TikTok (sem @): ").strip().lstrip("@")
-    if usuario.lower() not in ("teste", "--teste"):
+        usuario = ler_usuario(anterior)
+    if usuario.lower() not in ("teste", "--teste") and usuario != TIKTOK_USUARIO:
         mudar_config({"tiktok_usuario": usuario})
+    if usuario.lower() not in ("teste", "--teste"):
         print("Guardei o usuário: da próxima vez o programa já entra direto.\n")
     return usuario
+
+
+def ler_usuario(anterior: str) -> str:
+    """Pergunta o usuário aqui e, ao mesmo tempo, fica de olho na página de configurações:
+    o que for preenchido primeiro vale. Fora de uma janela do Windows, só pergunta aqui."""
+    pergunta = "Seu usuário do TikTok (sem @"
+    pergunta += ", aqui ou na página de configurações): " if pagina_iniciada else "): "
+    try:
+        import msvcrt
+    except ImportError:
+        msvcrt = None
+    if msvcrt is None or not sys.stdin.isatty():
+        return input(pergunta).strip().lstrip("@")
+    print(pergunta, end="", flush=True)
+    digitado = ""
+    while True:
+        if TIKTOK_USUARIO and TIKTOK_USUARIO != anterior:  # salvo pela página
+            print(f"\r{pergunta}{TIKTOK_USUARIO}{' ' * max(0, len(digitado) - len(TIKTOK_USUARIO))}")
+            print("(preenchido na página de configurações)")
+            return TIKTOK_USUARIO
+        if not msvcrt.kbhit():
+            time.sleep(0.05)
+            continue
+        c = msvcrt.getwch()
+        if c in ("\x00", "\xe0"):  # setas e outras teclas especiais: vêm em dois pedaços, ignora
+            msvcrt.getwch()
+        elif c == "\x03":
+            raise KeyboardInterrupt
+        elif c in ("\r", "\n"):
+            print()
+            return digitado.strip().lstrip("@")
+        elif c == "\x08":
+            if digitado:
+                digitado = digitado[:-1]
+                print("\b \b", end="", flush=True)
+        elif c.isprintable():
+            digitado += c
+            print(c, end="", flush=True)
 
 
 def esperar(segundos: float):
@@ -1612,12 +1659,14 @@ def ficar_na_live(client, usuario: str):
 
 def main():
     carregar_config()
+    # antes de abrir o navegador e o tosu: as janelas deles roubam o foco e o T/U (ou o usuário
+    # digitado na primeira vez) iria para elas em vez desta janela
+    usuario = escolher_usuario()
     iniciar_pagina()
     abrir_tosu()
     acertar_inicio()
     atexit.register(fechar_irc)  # sai do chat do osu! direitinho ao fechar
     salvar_pedidos()  # a fila começa vazia: o pedidos.txt não pode continuar mostrando a da live anterior
-    usuario = escolher_usuario()
     if usuario.lower() in ("teste", "--teste"):
         threading.Thread(target=narrador, daemon=True).start()
         threading.Thread(target=vigia_osu, daemon=True).start()
