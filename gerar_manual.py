@@ -405,13 +405,11 @@ s += itens([
     "Cada pessoa pode ter <b>um pedido por vez</b> na fila.",
     f"A fila aceita até <b>30 pedidos</b>. Você ou um moderador pode mudar com {cmd('!limitepedidos 20')}.",
     "A fila aparece no arquivo <b>pedidos.txt</b>, atualizado na hora. Dá para deixar aberto durante a live.",
-    "Para o público ver a fila na live, com fundo transparente: <b>só na primeira vez</b>, no TikTok LIVE "
-    "Studio, adicione uma fonte de <b>link</b> com <b>http://localtest.me:8765/pedidos?transparente</b> "
-    "(o endereço certo aparece na página de configurações). Nas próximas lives ela já aparece sozinha. "
-    "O LIVE Studio recusa <b>localhost</b>; <b>localtest.me</b> aponta para o seu próprio computador e só "
-    "abre a fila.",
-    "Se a fonte de link não funcionar, ligue a opção <b>janela_pedidos</b>: o programa abre a janela "
-    "<b>Fila de pedidos</b> (fundo preto) e você usa uma <b>Captura de janela</b> dela no LIVE Studio.",
+    "Para o público ver a fila na live, com fundo transparente, <b>só na primeira vez</b>: no topo da página de "
+    "configurações, clique em <b>Copiar o link da fila</b>. No TikTok LIVE Studio, "
+    "adicione uma fonte de <b>link</b> e cole com <b>Ctrl+V</b>. Nas próximas lives ela já aparece sozinha, "
+    "com o programa aberto. O link usa <b>localtest.me</b>, que aponta para o seu próprio computador "
+    "(o LIVE Studio recusa <b>localhost</b>) e só abre a fila.",
     "A fila <b>zera</b> quando o programa é fechado.",
 ])
 s.append(p("Sem fila: pedidos direto no osu!", h2))
@@ -460,8 +458,9 @@ s.append(p("Pela página de configurações (o jeito mais fácil)", h2))
 s.append(passos([
     ("Abra o LeitorChat", "A página só funciona com o programa aberto, ao vivo ou no modo de teste (seção 3)."),
     ("A página abre sozinha", "Ela abre no navegador quando o programa começa. Se fechar, digite "
-                              "<b>http://localhost:8765</b> na barra de endereço. Cada opção tem a explicação "
-                              "do que faz, e a seção Comandos mostra o que cada comando faz e os atalhos."),
+                              "<b>http://localhost:8765</b> na barra de endereço. No topo está o <b>link da fila de "
+                              "pedidos</b> (seção 6). Cada opção tem a explicação do que faz, e a seção "
+                              "Comandos mostra o que cada comando faz e os atalhos."),
     ("Mude o que quiser e clique em Salvar", "Vale <b>na hora</b>, sem fechar o programa, e fica gravado "
                                              "no config.json para as próximas lives."),
 ]))
@@ -654,9 +653,6 @@ s.append(opcoes([
     ("web_rede_local", "<b>true</b>: a página abre também no celular ou em outro PC do mesmo Wi-Fi "
                        "(qualquer pessoa nessa rede consegue mexer). <b>false</b>: só neste PC."),
     ("abrir_pagina", "<b>true</b>: abre a página no navegador quando o programa começa. <b>false</b>: não abre."),
-    ("janela_pedidos", "<b>true</b>: abre a janela <b>Fila de pedidos</b> junto com o programa, para a "
-                       "Captura de janela do TikTok LIVE Studio (só se a fonte de link não funcionar). "
-                       "<b>false</b>: não abre."),
 ]))
 
 s.append(p("Exemplos prontos", h2))

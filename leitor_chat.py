@@ -92,7 +92,6 @@ OSU_IRC_SENHA = ""
 WEB_PORTA = 8765        # http://localhost:8765 ; 0 desliga a página
 WEB_REDE_LOCAL = False  # True: abre também no celular/outro PC da mesma rede (qualquer um nela pode mexer)
 ABRIR_PAGINA = True     # abrir a página no navegador quando o programa começa
-JANELA_PEDIDOS = False  # abrir a janela "Fila de pedidos" junto com o programa (Captura de janela, se o link não der)
 # ------------------------------------------------
 
 fila: "queue.Queue[str]" = queue.Queue()
@@ -107,7 +106,8 @@ ARQUIVO_CONFIG = os.path.join(PASTA, "config.json")
 OPCOES = {nome.lower(): nome for nome in (
     "TIKTOK_USUARIO", "VOZ", "VELOCIDADE", "VOLUME", "LER_NOME", "TAMANHO_MAXIMO", "FILA_MAXIMA", "PALAVRAS_BLOQUEADAS",
     "PREFIXO", "MODERADORES", "ESPERA_COMANDO", "PEDIDOS_MAXIMOS", "FILA_PEDIDOS", "COMANDOS_DESATIVADOS",
-    "TOSU_URL", "AVISAR_MAPA", "AVISAR_RECORDE", "OSU_USUARIO", "OSU_IRC_SENHA", "WEB_PORTA", "WEB_REDE_LOCAL", "ABRIR_PAGINA", "JANELA_PEDIDOS")}
+    "TOSU_URL", "AVISAR_MAPA", "AVISAR_RECORDE", "OSU_USUARIO", "OSU_IRC_SENHA", "WEB_PORTA", "WEB_REDE_LOCAL", "ABRIR_PAGINA")}
+OPCOES_ANTIGAS = ("janela_pedidos",)  # opções de versões anteriores: ignoradas sem aviso
 SECRETAS = ("osu_irc_senha",)  # a página nunca mostra: só diz se tem uma salva e deixa trocar
 LIMITES = {"VELOCIDADE": (-10, 10), "VOLUME": (0, 100), "TAMANHO_MAXIMO": (1, None), "FILA_MAXIMA": (1, None),
            "ESPERA_COMANDO": (0, None), "PEDIDOS_MAXIMOS": (1, None), "WEB_PORTA": (0, 65535)}
@@ -144,6 +144,8 @@ def aplicar_config(config: dict) -> list:
     for chave, valor in config.items():
         nome = OPCOES.get(chave.lower())
         if nome is None:
+            if chave.lower() in OPCOES_ANTIGAS:
+                continue
             avisos.append(f"não conheço a opção \"{chave}\" (escrita errada?). Ignorando.")
             continue
         atual = globals()[nome]
@@ -1073,12 +1075,9 @@ class PaginaConfig(http.server.BaseHTTPRequestHandler):
 
     def do_POST(self):
         # exigir JSON faz o navegador barrar envios vindos de outros sites
-        if not self.host_ok() or self.path not in ("/api/config", "/api/janela-pedidos") or \
+        if not self.host_ok() or self.path != "/api/config" or \
                 not (self.headers.get("Content-Type") or "").startswith("application/json"):
             return self.responder(403, "text/plain; charset=utf-8", b"acesso negado")
-        if self.path == "/api/janela-pedidos":
-            erro = abrir_janela_pedidos()
-            return self.responder_json({"erro": erro} if erro else {})
         try:
             dados = json.loads(self.rfile.read(int(self.headers.get("Content-Length", 0))).decode("utf-8"))
             if not isinstance(dados, dict):
@@ -1100,15 +1099,12 @@ PAGINA_PEDIDOS = """<!doctype html>
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Fila de pedidos</title>
 <style>
-/* Padrão: a janela inteira é o painel escuro, pronta para a Captura de janela do LIVE Studio.
-   ?transparente: só a caixa, com o resto transparente (fonte de navegador do OBS e parecidos). */
-html, body { margin: 0; background: #000; }
-body { font: 700 26px/1.3 system-ui, "Segoe UI", sans-serif; color: #fff; overflow: hidden; }
-#painel { box-sizing: border-box; padding: 12px 18px 14px; text-shadow: 1px 1px 2px #000; }
-html.transparente, html.transparente body { background: transparent; }
-html.transparente body { padding: 8px; }
-html.transparente #painel { display: inline-block; min-width: 14em; max-width: calc(100vw - 16px);
-  background: rgba(0, 0, 0, .85); border-radius: 14px; }
+/* fundo transparente (fonte de link do LIVE Studio, fonte de navegador do OBS); a caixa escura
+   deixa o texto legível em cima do jogo */
+html, body { margin: 0; background: transparent; }
+body { font: 700 26px/1.3 system-ui, "Segoe UI", sans-serif; color: #fff; overflow: hidden; padding: 8px; }
+#painel { display: inline-block; min-width: 14em; max-width: calc(100vw - 16px); box-sizing: border-box;
+  padding: 12px 18px 14px; text-shadow: 1px 1px 2px #000; background: rgba(0, 0, 0, .85); border-radius: 14px; }
 h1 { font-size: 1.1em; margin: 0 0 6px; color: #fff; }
 h1 small { font-size: .65em; color: #fff; font-weight: 600; }
 ol { margin: 0; padding: 0; list-style: none; }
@@ -1128,7 +1124,6 @@ li { display: flex; gap: .45em; align-items: baseline; padding: 3px 0; }
 <script>
 const params = new URLSearchParams(location.search);
 const MAX = Math.max(1, parseInt(params.get("max")) || 5);
-if (params.has("transparente")) document.documentElement.classList.add("transparente");
 const $ = id => document.getElementById(id);
 
 function el(tag, classe, texto) {
@@ -1165,77 +1160,6 @@ setInterval(atualizar, 2000);
 """
 
 
-TITULO_JANELA = "Fila de pedidos"  # não mude: o LIVE Studio acha a janela pelo nome
-janela_thread = None  # a janela roda na própria thread (o tkinter só pode ser usado por uma thread)
-
-
-def texto_do_pedido(t: str) -> str:
-    t = t.strip()
-    return "#" + t if re.fullmatch(r"d?\s*\d+", t, re.IGNORECASE) else t
-
-
-def rodar_janela_pedidos():
-    """Janela "Fila de pedidos": fundo preto, letras brancas, atualiza sozinha. Abre atrás das outras
-    janelas (não tira o foco do jogo) e fecha junto com o programa."""
-    try:
-        import tkinter as tk
-    except ImportError:
-        print("[a janela da fila de pedidos não está disponível neste computador]")
-        return
-    raiz = tk.Tk()
-    raiz.title(TITULO_JANELA)
-    raiz.geometry("520x380")
-    raiz.configure(bg="#000")
-    titulo = tk.Label(raiz, bg="#000", fg="#fff", font=("Segoe UI", 20, "bold"), anchor="w")
-    titulo.pack(fill="x", padx=18, pady=(12, 4))
-    lista = tk.Frame(raiz, bg="#000")
-    lista.pack(fill="both", expand=True, padx=18)
-    mostrado = None
-
-    def linha(pos, mapa, quem):
-        f = tk.Frame(lista, bg="#000")
-        f.pack(fill="x", pady=1)
-        tk.Label(f, text=pos, width=3, anchor="w", bg="#000", fg="#fff", font=("Segoe UI", 17, "bold")).pack(side="left")
-        tk.Label(f, text=mapa, anchor="w", bg="#000", fg="#fff", font=("Segoe UI", 17, "bold")).pack(side="left")
-        if quem:
-            tk.Label(f, text=quem, anchor="w", bg="#000", fg="#fff", font=("Segoe UI", 12)).pack(side="left", padx=(10, 0))
-
-    def atualizar():
-        nonlocal mostrado
-        fila_agora = [(x["nome"], x["texto"]) for x in list(pedidos)]
-        estado = (tuple(fila_agora), pedidos_abertos, FILA_PEDIDOS, PREFIXO)
-        if estado != mostrado:
-            mostrado = estado
-            n = len(fila_agora)
-            extra = " (direto no osu!)" if not FILA_PEDIDOS else " (fechados)" if not pedidos_abertos \
-                else f" ({n})" if n else ""
-            titulo.config(text="Pedidos" + extra)
-            for filho in lista.winfo_children():
-                filho.destroy()
-            for i, (nome, texto) in enumerate(fila_agora[:5], 1):
-                linha(f"{i}.", texto_do_pedido(texto), nome)
-            if n > 5:
-                linha("", f"+ {n - 5} na fila", "")
-            elif n == 0 and FILA_PEDIDOS and pedidos_abertos:
-                linha("", f"Peça com {PREFIXO}pedir", "")
-        raiz.after(1000, atualizar)
-
-    atualizar()
-    raiz.after(300, raiz.lower)  # vai para trás das outras janelas: não atrapalha o jogo
-    print(f"[janela \"{TITULO_JANELA}\" aberta: no TikTok LIVE Studio, use Captura de janela nela (só na primeira vez)]")
-    raiz.mainloop()
-
-
-def abrir_janela_pedidos() -> str:
-    """Abre a janela da fila, se ela ainda não estiver aberta. Devolve "" se deu certo."""
-    global janela_thread
-    if janela_thread is not None and janela_thread.is_alive():
-        return ""
-    janela_thread = threading.Thread(target=rodar_janela_pedidos, daemon=True)
-    janela_thread.start()
-    return ""
-
-
 def ip_local() -> str:
     """IP deste PC na rede local (o que o celular usa para abrir a página)."""
     import socket
@@ -1259,6 +1183,7 @@ def iniciar_pagina():
         return
     threading.Thread(target=servidor.serve_forever, daemon=True).start()
     print(f"Página de configurações: http://localhost:{WEB_PORTA}")
+    print(f"Fila de pedidos (fonte de link no LIVE Studio): http://localtest.me:{WEB_PORTA}/pedidos")
     if ABRIR_PAGINA:
         webbrowser.open(f"http://localhost:{WEB_PORTA}")
     if WEB_REDE_LOCAL:
@@ -1291,6 +1216,10 @@ input[type=text], input[type=password], input[type=number], select, textarea { w
   border-radius: 6px; background: var(--fundo); color: inherit; font: inherit; }
 textarea { min-height: 72px; resize: vertical; }
 label.check { display: flex; gap: 8px; align-items: flex-start; }
+.passos { border: 1px solid var(--borda); border-radius: 8px; padding: 10px 14px; margin: 6px 0 10px; }
+.passos ol { margin: 6px 0; padding-left: 22px; }
+.passos li { margin: 6px 0; }
+.passos li small { display: block; margin-top: 4px; }
 label.check input { margin-top: 4px; }
 .faixa { display: flex; gap: 10px; align-items: center; }
 .faixa input { flex: 1; }
@@ -1314,6 +1243,21 @@ button.principal { background: var(--destaque); border-color: var(--destaque); c
 <main>
   <h1>Leitor de Chat</h1>
   <p class="sub">Ao salvar, as mudanças já valem na live e ficam gravadas no config.json.</p>
+
+  <section>
+    <h2>Link da fila de pedidos</h2>
+    <div class="passos">
+      <b>Para mostrar a fila na live, só uma vez:</b>
+      <ol>
+        <li>Clique em <b>Copiar o link da fila</b>: <button type="button" id="copiar_link">Copiar o link da fila</button>
+          <small><code id="link_studio"></code> · <a href="/pedidos" target="_blank">ver a fila agora</a></small></li>
+        <li>No TikTok LIVE Studio, adicione uma fonte de <b>link</b> (página da web) e cole com <b>Ctrl+V</b>.</li>
+        <li>Arraste e ajuste o tamanho da fila na tela. Pronto: nas próximas lives ela aparece sozinha.</li>
+      </ol>
+      <small>Não precisa abrir nada: a fila aparece no LIVE Studio enquanto o programa estiver aberto.
+        No OBS: fonte de navegador com <code id="link_pedidos"></code>. <code>?max=3</code> no fim mostra só os 3 primeiros.</small>
+    </div>
+  </section>
 
   <section>
     <h2>Live</h2>
@@ -1364,14 +1308,6 @@ button.principal { background: var(--destaque); border-color: var(--destaque); c
 
   <section>
     <h2>Pedidos de mapas</h2>
-    <p class="sub" style="margin:4px 0 8px"><b>Fila na live, com fundo transparente:</b> só na primeira vez, no TikTok
-      LIVE Studio, adicione uma fonte de <b>link</b> (página da web) com <b id="link_studio"></b>. Nas próximas lives ela
-      já aparece sozinha. No OBS: fonte de navegador com <b id="link_pedidos"></b>.
-      <code>?max=3</code> no fim mostra só os 3 primeiros.</p>
-    <label class="check"><input type="checkbox" id="janela_pedidos"><span>Abrir a janela da fila junto com o programa
-      <small>Só se a fonte de link não funcionar: a janela “Fila de pedidos” (fundo preto) abre atrás das outras, e no
-      LIVE Studio você adiciona uma <b>Captura de janela</b> dela. Não minimize a janela.</small></span></label>
-    <button type="button" id="mostrar_janela">Mostrar a janela da fila</button>
     <label for="pedidos_maximos">Tamanho máximo da fila de pedidos<small>Com a fila cheia, novos pedidos são recusados. No chat: !limitepedidos 20.</small></label>
     <input type="number" id="pedidos_maximos" min="1">
     <label class="check"><input type="checkbox" id="fila_pedidos"><span>Usar fila de pedidos<small>Desligado: cada pedido vai direto
@@ -1503,15 +1439,16 @@ async function salvar() {
 }
 
 document.addEventListener("input", e => { if (e.target.type === "range") atualizarFaixas(); });
-$("link_pedidos").textContent = location.origin + "/pedidos?transparente";
-$("link_studio").textContent = "http://localtest.me:" + (location.port || 80) + "/pedidos?transparente";
-$("mostrar_janela").onclick = async () => {
+$("link_pedidos").textContent = location.origin + "/pedidos";
+$("link_studio").textContent = "http://localtest.me:" + (location.port || 80) + "/pedidos";
+$("copiar_link").onclick = async () => {
+  const link = $("link_studio").textContent;
   try {
-    const r = await fetch("/api/janela-pedidos", {method: "POST", headers: {"Content-Type": "application/json"}, body: "{}"});
-    const d = await r.json();
-    status(d.erro ? "Não abriu: " + d.erro : "A janela da fila está aberta (veja na barra de tarefas).", !!d.erro);
+    await navigator.clipboard.writeText(link);
+    status("Link copiado. Agora cole no LIVE Studio com Ctrl+V.");
   } catch (e) {
-    status("Não consegui falar com o programa. Ele está aberto?", true);
+    getSelection().selectAllChildren($("link_studio"));
+    status("Não consegui copiar sozinho: o link ficou selecionado, aperte Ctrl+C.", true);
   }
 };
 $("salvar").onclick = salvar;
@@ -1681,8 +1618,6 @@ def main():
     atexit.register(fechar_irc)  # sai do chat do osu! direitinho ao fechar
     salvar_pedidos()  # a fila começa vazia: o pedidos.txt não pode continuar mostrando a da live anterior
     usuario = escolher_usuario()
-    if JANELA_PEDIDOS:
-        abrir_janela_pedidos()
     if usuario.lower() in ("teste", "--teste"):
         threading.Thread(target=narrador, daemon=True).start()
         threading.Thread(target=vigia_osu, daemon=True).start()
