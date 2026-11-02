@@ -118,6 +118,17 @@ def main():
     shutil.copyfile(os.path.join(sys.base_prefix, "LICENSE.txt"), os.path.join(SAIDA, pasta, "LICENSE.txt"))
     linhas.append(("Python", versao_py, "PSF-2.0", "https://www.python.org/downloads/source/", pasta, ""))
 
+    # e o Tcl/Tk (janela da fila de pedidos); o Tcl e o Tk usam o mesmo texto de licença
+    termos = os.path.join(sys.base_prefix, "tcl", "tk8.6", "license.terms")
+    if os.path.exists(termos):
+        import tkinter
+        versao_tk = tkinter.Tcl().eval("info patchlevel")
+        pasta = f"Tcl-Tk-{versao_tk}"
+        os.makedirs(os.path.join(SAIDA, pasta))
+        shutil.copyfile(termos, os.path.join(SAIDA, pasta, "license.terms"))
+        linhas.append(("Tcl/Tk", versao_tk, "TCL (estilo BSD)", "https://www.tcl-lang.org/software/tcltk/",
+                       pasta, "Vai junto com o Python, para a janela da fila de pedidos."))
+
     # tosu: a versão fica anotada pelo instalar.bat quando ele baixa
     try:
         with open(os.path.join(PASTA, "tosu", "VERSAO.txt"), encoding="utf-8-sig") as f:
