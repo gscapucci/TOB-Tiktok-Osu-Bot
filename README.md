@@ -202,7 +202,7 @@ para `!mensagens`.
 
 | Comando | O que a voz responde | Para desligar |
 |---|---|---|
-| `!comandos` (ou `!ajuda`) | Lista os comandos ligados (para você e os mods, os de moderação) | `"comandos"` em `comandos_desativados` |
+| `!comandos` (ou `!ajuda`) | Lista os comandos ligados. Para você e os mods, fala os de moderação; `!comandos chat` fala os de todo mundo e `!comandos todos`, todos | `"comandos"` em `comandos_desativados` |
 | `!mensagens` | "Fulano, você mandou 12 mensagens nesta live." | `"mensagens"` |
 | `!top` | As 3 pessoas que mais mandaram mensagem | `"top"` |
 | `!copiar texto` | Copia o texto para o seu **Ctrl+C**. "Copiei a mensagem de Fulano." | `"copiar"` |
@@ -315,9 +315,9 @@ O chat pede mapas, eles entram numa fila e você abre um de cada vez.
 | Comando | Quem | O que faz |
 |---|---|---|
 | `!pedir https://osu.ppy.sh/beatmapsets/...` | Todos | Pede pelo link |
-| `!pedir Freedom Dive` | Todos | Pede pelo nome (útil porque o TikTok costuma bloquear links) |
-| `!pedir 123456` | Todos | Pede pelo código do set (o número depois de `beatmapsets/` no link) |
-| `!pedir d1234567` | Todos | Pede uma dificuldade específica (o número depois de `#osu/`, com `d` na frente) |
+| `!pedir Freedom Dive` | Todos | Pede pelo nome (útil porque o TikTok costuma bloquear links). A busca mostra mapas de qualquer status, ranqueados ou não |
+| `!pedir 123456` | Todos | Pede pelo código do set (o número depois de `beatmapsets/` no link). `!pedir s123456` faz o mesmo |
+| `!pedir d1234567` | Todos | Pede uma dificuldade específica (o número depois de `#osu/`, com `d` ou `b` na frente: `!pedir b1234567` faz o mesmo) |
 | `!pedidos` | Todos | "Tem 5 pedidos na fila. O seu é o número 3." |
 | `!proximo` | Você/mods | Manda o próximo no seu chat do osu! (ou abre no navegador) e fala de quem é |
 | `!fecharpedidos` / `!abrirpedidos` | Você/mods | Para / volta a aceitar pedidos (também aceita `!fechar pedidos`) |
@@ -404,7 +404,7 @@ Todos ficam na mesma pasta do programa.
 
 | Arquivo | O que tem |
 |---|---|
-| `registros\live_DATA_HORA.csv` | Planilha (abre no Excel) com quem entrou na live, horário e quantas mensagens mandou. Salva sozinha a cada 5 segundos. |
+| `registros\live_DATA_HORA.csv` | Planilha (abre no Excel) com quem entrou na live, horário e quantas mensagens mandou. Salva sozinha a cada 5 segundos. As de mais de 7 dias são apagadas sozinhas quando o programa abre (copie para outra pasta a que quiser guardar). |
 | `apelidos.txt` | Apelidos usados pela voz. Pode editar à vontade. |
 | `pedidos.txt` | Fila de pedidos de mapas, atualizada na hora. |
 

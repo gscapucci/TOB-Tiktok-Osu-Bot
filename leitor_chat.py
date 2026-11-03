@@ -229,6 +229,32 @@ def registrar(user, mensagem=False):
         mudou = True
 
 
+DIAS_REGISTROS = 7  # planilhas de live mais antigas que isso são apagadas quando o programa abre
+
+
+def apagar_registros_antigos():
+    """Apaga as planilhas live_DATA_HORA.csv de mais de DIAS_REGISTROS dias (pela data no nome).
+    Outros arquivos que você puser na pasta registros não são mexidos."""
+    limite = datetime.now() - timedelta(days=DIAS_REGISTROS)
+    apagados = 0
+    try:
+        nomes = os.listdir(PASTA_REGISTROS)
+    except OSError:
+        return
+    for nome in nomes:
+        m = re.fullmatch(r"live_(\d{4}-\d{2}-\d{2}_\d{2}-\d{2})\.csv", nome)
+        if not m:
+            continue
+        try:
+            if datetime.strptime(m.group(1), "%Y-%m-%d_%H-%M") < limite:
+                os.remove(os.path.join(PASTA_REGISTROS, nome))
+                apagados += 1
+        except (ValueError, OSError):  # data estranha no nome, ou a planilha aberta no Excel: fica para a próxima
+            pass
+    if apagados:
+        print(f"[apaguei {apagados} {'registro' if apagados == 1 else 'registros'} de mais de {DIAS_REGISTROS} dias]")
+
+
 def salvar(arquivo):
     """Salva a planilha (abre no Excel), ordenada por quem mais mandou mensagem."""
     global mudou
@@ -395,14 +421,16 @@ pedidos_abertos = True  # !fecharpedidos / !abrirpedidos
 
 def link_do_pedido(texto: str) -> str:
     """Link do beatmap, se a pessoa mandou um link ou código; senão, a busca do osu! com o que ela escreveu.
-    Código: só o número = set (beatmapsets/123); "d" + número = uma dificuldade específica (beatmaps/123)."""
+    Código: só o número ou "s" + número = set (beatmapsets/123); "d" ou "b" + número = uma dificuldade
+    específica (beatmaps/123), o "b" como nos links osu.ppy.sh/b/123 do site."""
     m = re.search(r"osu\.ppy\.sh/\S+", texto)
     if m:
         return "https://" + m.group(0)
-    m = re.fullmatch(r"(d?)\s*(\d+)", texto.strip(), re.IGNORECASE)
+    m = re.fullmatch(r"([dbs]?)\s*(\d+)", texto.strip(), re.IGNORECASE)
     if m:
-        return f"https://osu.ppy.sh/{'b' if m.group(1) else 's'}/{m.group(2)}"
-    return "https://osu.ppy.sh/beatmapsets?q=" + urllib.parse.quote(texto)
+        return f"https://osu.ppy.sh/{'b' if m.group(1).lower() in ('d', 'b') else 's'}/{m.group(2)}"
+    # s=any: a busca do site, sem isso, só mostra mapas com placar (ranqueados, loved...)
+    return "https://osu.ppy.sh/beatmapsets?q=" + urllib.parse.quote(texto) + "&s=any"
 
 
 # Chat do osu! pelo IRC (irc.ppy.sh). Entra uma vez, no primeiro envio, e fica conectado até o programa
@@ -685,12 +713,12 @@ APELIDOS_COMANDO = {
 TODOS_COMANDOS = ["comandos"] + COMANDOS_PUBLICOS + COMANDOS_MOD + COMANDOS_DONO
 # o que cada comando faz (mostrado na página de configurações)
 DESCRICAO_COMANDO = {
-    "comandos": "Fala a lista de comandos ligados. Para você e os mods, fala os de moderação.",
+    "comandos": "Fala a lista de comandos ligados. Para você e os mods, fala os de moderação; !comandos chat fala os de todo mundo e !comandos todos fala tudo.",
     "np": "Fala o mapa que você está jogando: música, dificuldade, estrelas e mods.",
     "pp": "Fala quanto PP vale o SS do mapa atual com os mods selecionados, e também com 98% e 95%.",
     "rank": "Fala o seu rank global, o PP e a precisão.",
     "recorde": "Fala o maior PP que você fez nesta live e em qual mapa.",
-    "pedir": "Pede um mapa: pelo link, pelo nome, pelo código do set (123456) ou da dificuldade (d1234567).",
+    "pedir": "Pede um mapa: pelo link, pelo nome, pelo código do set (123456 ou s123456) ou da dificuldade (d1234567 ou b1234567). Pelo nome, a busca mostra mapas de qualquer status, ranqueados ou não.",
     "pedidos": "Fala quantos pedidos tem na fila e a posição de quem perguntou.",
     "mensagens": "Fala quantas mensagens a pessoa mandou nesta live.",
     "top": "Fala as 3 pessoas que mais mandaram mensagem na live.",
@@ -924,8 +952,18 @@ def tratar_comando(user, nome: str, texto: str, dono: str) -> bool:
         return True
 
     if cmd == "comandos":
-        falar(ajuda(COMANDOS_MOD + (COMANDOS_DONO if eh_dono else []), "Comandos de moderação") if eh_mod
-              else ajuda(COMANDOS_PUBLICOS, "Comandos"))
+        # mods: "!comandos" = moderação, "!comandos chat" = os de todo mundo, "!comandos todos" = tudo
+        qual = arg.lower() if eh_mod else ""
+        moderacao = COMANDOS_MOD + (COMANDOS_DONO if eh_dono else [])
+        if qual in ("todos", "tudo"):
+            falar(ajuda(COMANDOS_PUBLICOS + moderacao, "Todos os comandos"))
+        elif qual in ("chat", "publicos", "públicos"):
+            falar(ajuda(COMANDOS_PUBLICOS, "Comandos de todo mundo"))
+        elif eh_mod:
+            falar(ajuda(moderacao, "Comandos de moderação") +
+                  " Os de todo mundo: exclamação comandos chat. Todos: exclamação comandos todos.")
+        else:
+            falar(ajuda(COMANDOS_PUBLICOS, "Comandos"))
     elif cmd == "mensagens":
         with trava:
             n = pessoas.get(user.unique_id, {}).get("mensagens", 0)
@@ -1673,7 +1711,8 @@ def main():
         return modo_teste()
 
     os.makedirs(PASTA_REGISTROS, exist_ok=True)
-    arquivo = os.path.join(PASTA_REGISTROS, f"live_{datetime.now():%Y-%m-%d_%H-%M}.csv")
+    apagar_registros_antigos()
+    arquivo =os.path.join(PASTA_REGISTROS, f"live_{datetime.now():%Y-%m-%d_%H-%M}.csv")
 
     threading.Thread(target=narrador, daemon=True).start()
     threading.Thread(target=salvador_automatico, args=(arquivo,), daemon=True).start()

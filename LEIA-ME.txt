@@ -34,6 +34,8 @@ COMO USAR EM CADA LIVE
 COMANDOS DO CHAT
   Todo mundo:
   !comandos              fala a lista de comandos (atalhos: !ajuda, !cmd)
+                         você e os mods: os de moderação; !comandos chat = os de todo mundo,
+                         !comandos todos = todos
   !mensagens             quantas mensagens a pessoa mandou nesta live (!msg)
   !top                   as 3 pessoas que mais mandaram mensagem
   !copiar <texto>        copia o texto para o seu Ctrl+C
@@ -42,8 +44,9 @@ COMANDOS DO CHAT
   !rank                  seu rank global, PP e precisão
   !recorde               o recorde de PP desta live (!rec)
   !pedir <link ou nome>  pede um mapa do osu!
-                         também aceita o código: !pedir 123456 (o set, com todas as dificuldades)
-                         ou !pedir d1234567 (uma dificuldade específica)
+                         pelo nome, acha mapas de qualquer status (ranqueados ou não)
+                         também aceita o código: !pedir 123456 ou s123456 (o set, com todas
+                         as dificuldades) ou !pedir d1234567 ou b1234567 (uma dificuldade específica)
                          no link .../beatmapsets/123456#osu/1234567, o set é o 123456
                          e a dificuldade é o 1234567
   !pedidos               quantos pedidos tem na fila e a posição da pessoa
@@ -136,6 +139,8 @@ ARQUIVOS
   O programa também cria, nesta pasta:
   config.json   as suas configurações
   registros\    planilhas de cada live (quem entrou e quantas mensagens mandou)
+                as de mais de 7 dias são apagadas sozinhas ao abrir o programa:
+                copie para outra pasta a que quiser guardar
   apelidos.txt  apelidos que a voz usa
   pedidos.txt   fila de pedidos de mapas. Para mostrar na live com fundo transparente
                 (só na primeira vez): no topo da página de configurações, clique em

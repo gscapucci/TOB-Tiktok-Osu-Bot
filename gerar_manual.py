@@ -261,7 +261,8 @@ s += [PageBreak(), p("4. Comandos para o chat", h1),
         f"Vários comandos têm um atalho mais curto, como {cmd('!msg')} (veja o fim da seção 5).", sub)]
 s.append(tabela(["Comando", "O que faz"], [
     [cmd("!comandos"), f"Fala a lista de comandos. {cmd('!ajuda')} faz o mesmo. Para você e os "
-                       "moderadores, fala a lista dos comandos de moderação."],
+                       "moderadores, fala a lista dos comandos de moderação; <b>!comandos chat</b> fala os de "
+                       "todo mundo e <b>!comandos todos</b> fala todos."],
     [cmd("!mensagens"), "Quantas mensagens a pessoa mandou nesta live."],
     [cmd("!top"), "As 3 pessoas que mais mandaram mensagem."],
     [cmd("!copiar texto"), "Copia o texto para o seu Ctrl+C. É só dar Ctrl+V onde quiser."],
@@ -369,10 +370,12 @@ s += [PageBreak(), p("6. Pedidos de mapas do osu!", h1),
 s.append(p("Como o chat pede", h2))
 s += itens([
     f"Pelo link: {cmd('!pedir https://osu.ppy.sh/beatmapsets/...')}",
-    f"Pelo nome: {cmd('!pedir Freedom Dive')}. Útil porque o TikTok costuma bloquear links no chat.",
-    f"Pelo código do set: {cmd('!pedir 123456')}. É o número depois de <b>beatmapsets/</b> no link.",
+    f"Pelo nome: {cmd('!pedir Freedom Dive')}. Útil porque o TikTok costuma bloquear links no chat. "
+    "A busca mostra mapas de qualquer status, ranqueados ou não.",
+    f"Pelo código do set: {cmd('!pedir 123456')}. É o número depois de <b>beatmapsets/</b> no link "
+    f"({cmd('!pedir s123456')} faz o mesmo).",
     f"Por uma dificuldade específica: {cmd('!pedir d1234567')}. É o número depois de <b>#osu/</b> no link, "
-    "com um <b>d</b> na frente.",
+    f"com um <b>d</b> ou um <b>b</b> na frente ({cmd('!pedir b1234567')} faz o mesmo).",
 ])
 s.append(fala("Pedido de Caio anotado, posição 3."))
 s.append(p("Como você abre os pedidos", h2))
@@ -697,7 +700,9 @@ s += [PageBreak(), p("10. Arquivos criados pelo app", h1),
       p("Todos ficam na mesma pasta do programa.", sub)]
 s.append(tabela(["Arquivo", "O que tem"], [
     ["<b>registros\\live_DATA_HORA.csv</b>", "Planilha (abre no Excel) com quem entrou na live, a que horas e "
-                                            "quantas mensagens mandou. Salva sozinha a cada 5 segundos."],
+                                            "quantas mensagens mandou. Salva sozinha a cada 5 segundos. As de mais de "
+                                            "<b>7 dias</b> são apagadas sozinhas quando o programa abre: "
+                                            "copie para outra pasta a que quiser guardar."],
     ["<b>apelidos.txt</b>", "Os apelidos usados pela voz. Pode editar durante a live, vale na hora."],
     ["<b>pedidos.txt</b>", "A fila de pedidos de mapas, atualizada na hora."],
     ["<b>config.json</b>", "As configurações (seção 9). O programa cria na primeira vez que abre; "
