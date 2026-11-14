@@ -162,20 +162,24 @@ Tratamentos automáticos:
 - Letras repetidas são encurtadas: "kkkkkkkk" → "kkk"
 - Mensagens longas são cortadas
 - Se o chat estiver rápido demais, as mensagens mais antigas são puladas para a voz não ficar atrasada
-- Mensagens com palavras bloqueadas não são lidas
+- Respostas de comandos e avisos passam na frente das mensagens do chat
+- Mensagens com palavras bloqueadas não são lidas; se a palavra estiver no nome da pessoa, a voz fala "Alguém" no lugar do nome
+- Pessoas silenciadas não são lidas
+- Se a voz da internet falhar, a voz avisa uma vez e a mensagem sai na voz do Windows; a da internet é tentada de novo a cada minuto
 
 | Configuração | O que faz | Padrão |
 |---|---|---|
-| `voz` | Qual voz usar: `"pt-BR-FranciscaNeural"` (feminina), `"pt-BR-ThalitaMultilingualNeural"` (feminina), `"pt-BR-AntonioNeural"` (masculina), `"pt-PT-RaquelNeural"` (Portugal, feminina), `"pt-PT-DuarteNeural"` (Portugal, masculina) ou `"windows"` (voz do Windows, funciona sem internet). | `"pt-BR-FranciscaNeural"` |
+| `voz` | Qual voz usar: `"pt-BR-FranciscaNeural"` (feminina), `"pt-BR-ThalitaMultilingualNeural"` (feminina), `"pt-BR-AntonioNeural"` (masculina), `"pt-PT-RaquelNeural"` (Portugal, feminina), `"pt-PT-DuarteNeural"` (Portugal, masculina) ou `"windows"` (voz do Windows, funciona sem internet). Também há vozes de outros países que falam português com sotaque: `"en-US-AvaMultilingualNeural"`, `"en-US-EmmaMultilingualNeural"`, `"en-US-BrianMultilingualNeural"`, `"en-AU-WilliamMultilingualNeural"`, `"fr-FR-VivienneMultilingualNeural"`, `"fr-FR-RemyMultilingualNeural"`, `"de-DE-SeraphinaMultilingualNeural"`, `"de-DE-FlorianMultilingualNeural"`, `"it-IT-GiuseppeMultilingualNeural"` e `"ko-KR-HyunsuMultilingualNeural"`. | `"pt-BR-FranciscaNeural"` |
 | `velocidade` | De `-10` (lento) a `10` (rápido) | `1` |
 | `volume` | De `0` a `100` | `100` |
 | `ler_nome` | `true` fala "Fulano disse:", `false` fala só a mensagem | `true` |
 | `tamanho_maximo` | Quantos caracteres no máximo de cada mensagem | `200` |
 | `fila_maxima` | Quantas mensagens podem ficar esperando para serem lidas | `15` |
 | `palavras_bloqueadas` | Mensagens com essas palavras não são lidas. Ex.: `["spam", "feio"]` | `[]` |
+| `usuarios_silenciados` | Usuários do TikTok, sem @, que a voz não lê e cujos comandos são ignorados | `[]` |
 
 **Durante a live:** `!mudo` / `!voltar`, `!voz`, `!velocidade`, `!volume`, `!nomes`,
-`!bloquear` / `!desbloquear`, `!tamanho`, `!fila` (veja a [seção 5](#5-comandos-de-moderação)).
+`!bloquear` / `!desbloquear`, `!silenciar` / `!liberar`, `!tamanho`, `!fila` (veja a [seção 5](#5-comandos-de-moderação)).
 
 ### Apelidos
 
@@ -205,13 +209,15 @@ para `!mensagens`.
 | `!comandos` (ou `!ajuda`) | Lista os comandos ligados. Para você e os mods, fala os de moderação; `!comandos chat` fala os de todo mundo e `!comandos todos`, todos | `"comandos"` em `comandos_desativados` |
 | `!mensagens` | "Fulano, você mandou 12 mensagens nesta live." | `"mensagens"` |
 | `!top` | As 3 pessoas que mais mandaram mensagem | `"top"` |
-| `!copiar texto` | Copia o texto para o seu **Ctrl+C**. "Copiei a mensagem de Fulano." | `"copiar"` |
+| `!sons` | Lista os sons — veja [Sons](#sons) abaixo | `"sons"` |
+| `!ai` (ou o nome de qualquer som) | Toca o som — veja [Sons](#sons) abaixo | `"ai"` |
 | `!np` (ou `!mapa`) | Mapa atual — veja a [seção 7](#7-osu-ao-vivo-tosu) | `"np"` |
 | `!pp` | PP do SS com os mods atuais — [seção 7](#7-osu-ao-vivo-tosu) | `"pp"` |
 | `!rank` | Seu rank global — [seção 7](#7-osu-ao-vivo-tosu) | `"rank"` |
 | `!recorde` | Recorde de PP da live — [seção 7](#7-osu-ao-vivo-tosu) | `"recorde"` |
 | `!pedir` | Pede um mapa — [seção 6](#6-pedidos-de-mapas-do-osu) | `"pedir"` |
 | `!pedidos` | Tamanho da fila de pedidos — [seção 6](#6-pedidos-de-mapas-do-osu) | `"pedidos"` |
+| `!cancelar` | Tira da fila o próprio pedido — [seção 6](#6-pedidos-de-mapas-do-osu) | `"cancelar"` |
 
 ### Anti-spam
 
@@ -223,11 +229,57 @@ são ignorados em silêncio. Você e os moderadores não têm esse limite.
 | `espera_comando` | Segundos entre um comando e outro, por pessoa | `15` |
 | `prefixo` | O símbolo que marca um comando | `"!"` |
 
-### Sobre o `!copiar`
+### Sons
 
-Qualquer pessoa da live pode usar, então alguém pode trocar o seu Ctrl+C enquanto
-você está copiando outra coisa. Se atrapalhar, desligue com
-`"comandos_desativados": ["copiar"]`.
+Você cria comandos que tocam um áudio: o som **ai** toca quando alguém escreve `!ai`.
+Todo mundo pode usar, e o som entra na fila da voz, então nunca toca por cima de uma fala.
+
+Os sons ficam no `config.json`, na opção `sons`: cada linha é o comando (sem o `!`) e o arquivo
+que ele toca. Os arquivos ficam na pasta `sons`, ao lado do programa.
+
+```json
+"sons": {
+  "ai": "ai.mp3",
+  "banido": "banido_FzWiL58.mp3",
+  "zap": "som-do-zap-zap-estourado.mp3"
+}
+```
+
+Para criar um som, tem dois jeitos:
+
+- **Pela página de configurações**, na parte **Sons** (o mais fácil): escreva o nome do comando,
+  escolha o arquivo (`.mp3` ou `.wav`, até 5 MB) e clique em **Adicionar**. A página copia o arquivo
+  para a pasta `sons` e coloca o som no `config.json`. Vale na hora. Ali também dá para tocar e
+  apagar os sons.
+- **Pelo `config.json`**: coloque o arquivo na pasta `sons`, feche o programa, acrescente uma linha
+  em `"sons"` e abra de novo. Dá para usar um arquivo de outra pasta com o caminho completo
+  (`"C:\\Sons\\ai.mp3"`, com as barras dobradas).
+
+O programa já vem com 7 sons, e os arquivos deles vêm na pasta `sons` do zip:
+
+| Comando | Arquivo |
+|---|---|
+| `!ai` | `ai-ai-ai.mp3` |
+| `!ban` e `!banido` | `banido_FzWiL58.mp3` |
+| `!cano` e `!quecano` | `metal-pipe-clang.mp3` |
+| `!zap` | `som-do-zap-zap-estourado.mp3` |
+| `!fah` | `fahhhhhhhhhhhhhh.mp3` |
+
+Para tirar um, apague na página (ou a linha no `config.json`); para só desligar, use `!desligar zap`.
+
+O nome do comando fica só com letras, números e `_` (maiúsculas, espaços e o `!` são tirados). Um
+som com o nome de um comando do programa (como `pedir`) é ignorado, e um som cujo arquivo não está
+na pasta não toca: o programa avisa na janela ao abrir, e a página mostra em vermelho.
+
+Para o chat não virar uma mesa de som, depois de um som os outros esperam **10 segundos**
+(`espera_som`, ou `!esperasom 5` no chat). Os que chegarem antes são ignorados em silêncio.
+A espera entre comandos de cada pessoa também vale. Você e os mods não esperam. No `!mudo`, os
+sons não tocam. Para desligar um som: `!desligar ai`, ou desmarque em **Comandos ligados** na página.
+
+| Configuração | O que faz | Padrão |
+|---|---|---|
+| `sons` | Os comandos de som: `{"comando": "arquivo"}` | os 7 sons padrão (abaixo) |
+| `espera_som` | Segundos entre um som e outro, para o chat todo | `10` |
 
 ---
 
@@ -248,22 +300,27 @@ live e valem até fechar o programa.
 
 | Comando | O que faz | Configuração que muda |
 |---|---|---|
-| `!mudo` | Para de ler o chat (e apaga o que estava esperando). Os avisos automáticos e as respostas dos comandos do público (`!np`, `!top`...) também param. | — |
+| `!mudo` | Para de ler o chat (e apaga o que estava esperando). Os avisos automáticos e as respostas dos comandos do público (`!np`, `!top`...) também param, mas os pedidos de mapas (`!pedir`) continuam entrando, em silêncio. | — |
 | `!voltar` | Volta a ler o chat | — |
 | `!limpar` | Apaga as mensagens que estavam esperando para serem lidas | — |
 | `!apelido fulano Aninha` | A voz passa a chamar o usuário `fulano` de Aninha. "Beleza, agora vou chamar fulano de Aninha." | `apelidos.txt` |
-| `!voz antonio` | Troca a voz: `francisca`, `thalita`, `antonio`, `raquel`, `duarte` ou `maria` (do Windows, sem internet). Sem nome, fala a lista. | `voz` |
+| `!copiar texto` | Copia o texto para o seu **Ctrl+C**. "Copiei a mensagem de Fulano." É só de você e dos mods, para ninguém trocar o que você copiou. | — |
+| `!voz antonio` | Troca a voz: `francisca`, `thalita`, `antonio`, `raquel`, `duarte` ou `maria` (do Windows, sem internet). Com sotaque de gringo: `ava`, `emma`, `brian`, `william`, `vivienne`, `remy`, `seraphina`, `florian`, `giuseppe` ou `hyunsu`. Sem nome, fala a lista. | `voz` |
 | `!velocidade 5` | Muda a velocidade da voz (-10 a 10) | `velocidade` |
 | `!volume 70` | Muda o volume (0 a 100) | `volume` |
 | `!nomes` | Liga/desliga o "Fulano disse:" | `ler_nome` |
 | `!bloquear palavra` | Bloqueia uma palavra (a voz não repete a palavra, só aparece na janela) | `palavras_bloqueadas` |
 | `!desbloquear palavra` | Desbloqueia uma palavra | `palavras_bloqueadas` |
+| `!silenciar Fulano` | A voz para de ler a pessoa, o que ela já mandou sai da fila e os comandos dela são ignorados. Aceita o nome que aparece no chat ou o usuário. A voz não repete quem foi, e o silêncio não vale para você e os mods. | `usuarios_silenciados` |
+| `!liberar Fulano` | Tira a pessoa dos silenciados | `usuarios_silenciados` |
 | `!desligar copiar` / `!ligar copiar` | Desliga / religa um comando (nome sem o `!`). O `!ligar` e o `!desligar` não podem ser desligados pelo chat. | `comandos_desativados` |
 | `!avisos mapa` / `!avisos recorde` | Liga/desliga o aviso de mapa novo ou de recorde. Só `!avisos` fala como estão. | `avisar_mapa` / `avisar_recorde` |
 | `!espera 10` | Segundos que cada pessoa espera entre comandos (anti-spam) | `espera_comando` |
+| `!esperasom 5` | Segundos entre um som e outro, para o chat todo — veja [Sons](#sons) | `espera_som` |
 | `!tamanho 150` | Quantas letras de cada mensagem são lidas | `tamanho_maximo` |
 | `!fila 10` | Quantas mensagens podem ficar esperando a voz | `fila_maxima` |
 | `!proximo` | Abre o próximo pedido de mapa — [seção 6](#6-pedidos-de-mapas-do-osu) | — |
+| `!remover 3` | Tira da fila o pedido da posição 3, sem abrir o mapa | — |
 | `!fecharpedidos` / `!abrirpedidos` | Para / volta a aceitar pedidos | — |
 | `!zerarpedidos` | Apaga a fila de pedidos | — |
 | `!limitepedidos 20` | Tamanho máximo da fila de pedidos (também aceita `!limite pedidos 20`) | `pedidos_maximos` |
@@ -319,7 +376,9 @@ O chat pede mapas, eles entram numa fila e você abre um de cada vez.
 | `!pedir 123456` | Todos | Pede pelo código do set (o número depois de `beatmapsets/` no link). `!pedir s123456` faz o mesmo |
 | `!pedir d1234567` | Todos | Pede uma dificuldade específica (o número depois de `#osu/`, com `d` ou `b` na frente: `!pedir b1234567` faz o mesmo) |
 | `!pedidos` | Todos | "Tem 5 pedidos na fila. O seu é o número 3." |
+| `!cancelar` | Todos | Tira da fila o próprio pedido, para corrigir um pedido errado. Não espera os 15 segundos entre comandos, mas o próximo `!pedir` espera |
 | `!proximo` | Você/mods | Manda o próximo no seu chat do osu! (ou abre no navegador) e fala de quem é |
+| `!remover 3` | Você/mods | Tira da fila o pedido da posição 3, sem abrir o mapa |
 | `!fecharpedidos` / `!abrirpedidos` | Você/mods | Para / volta a aceitar pedidos (também aceita `!fechar pedidos`) |
 | `!zerarpedidos` | Você/mods | Apaga a fila inteira |
 | `!limitepedidos 20` | Você/mods | Muda o tamanho máximo da fila (fica gravado) |
@@ -348,14 +407,15 @@ O chat pede mapas, eles entram numa fila e você abre um de cada vez.
 - A fila **zera** quando o programa é fechado.
 - **Sem fila** (`!filapedidos` ou `"fila_pedidos": false`): cada `!pedir` vai na hora para o seu chat do
   osu! e a voz não anuncia. Sem limite por pessoa nem de tamanho; `!fecharpedidos`, palavras bloqueadas
-  e a espera entre comandos continuam valendo. Precisa do chat do osu! configurado; se o envio falhar,
-  o link fica só na janela (o navegador não abre sozinho no meio da partida).
+  e a espera entre comandos continuam valendo. Precisa do chat do osu! configurado; se o envio falhar
+  (ou o chat não estiver configurado), a voz avisa e o pedido fica guardado na fila, para sair com o
+  `!proximo` (o navegador não abre sozinho no meio da partida).
 
 | Configuração | O que faz | Padrão |
 |---|---|---|
 | `pedidos_maximos` | Tamanho máximo da fila | `30` |
 | `fila_pedidos` | `false`: pedidos vão direto para o chat do osu!, sem fila e sem a voz anunciar | `true` |
-| Desligar tudo | `"comandos_desativados": ["pedir", "pedidos", "proximo", "fecharpedidos", "abrirpedidos", "zerarpedidos"]` | — |
+| Desligar tudo | `"comandos_desativados": ["pedir", "pedidos", "cancelar", "proximo", "remover", "fecharpedidos", "abrirpedidos", "zerarpedidos"]` | — |
 
 ---
 
@@ -407,6 +467,7 @@ Todos ficam na mesma pasta do programa.
 | `registros\live_DATA_HORA.csv` | Planilha (abre no Excel) com quem entrou na live, horário e quantas mensagens mandou. Salva sozinha a cada 5 segundos. As de mais de 7 dias são apagadas sozinhas quando o programa abre (copie para outra pasta a que quiser guardar). |
 | `apelidos.txt` | Apelidos usados pela voz. Pode editar à vontade. |
 | `pedidos.txt` | Fila de pedidos de mapas, atualizada na hora. |
+| `sons\` | Os arquivos dos sons. Qual comando toca cada um fica no `config.json`, em `sons`. |
 
 > Se a planilha estiver aberta no Excel, o programa não consegue salvar —
 > feche o Excel antes de encerrar o programa para salvar a versão final.
@@ -427,12 +488,15 @@ configurações. Os comandos de chat que mudam uma configuração gravam no
 | Velocidade da voz | `!velocidade N` | `"velocidade": N` |
 | Volume | `!volume N` | `"volume": N` |
 | Palavras bloqueadas | `!bloquear` / `!desbloquear palavra` | `"palavras_bloqueadas": [...]` |
+| Pessoas silenciadas | `!silenciar` / `!liberar nome` | `"usuarios_silenciados": [...]` |
 | Qualquer comando | `!desligar` / `!ligar nome` | `"comandos_desativados": ["nome"]` |
 | Aceitar pedidos | `!fecharpedidos` / `!abrirpedidos` | — |
 | Aviso de mapa novo | `!avisos mapa` | `"avisar_mapa": true/false` |
 | Aviso de recorde | `!avisos recorde` | `"avisar_recorde": true/false` |
 | Quem é moderador | `!mod` / `!desmod usuario` (só você) | `"moderadores": ["usuario"]` |
 | Tempo anti-spam | `!espera N` | `"espera_comando": N` |
+| Tempo entre sons | `!esperasom N` | `"espera_som": N` |
+| Comandos de som | página, parte **Sons** | `"sons": {"ai": "ai.mp3"}` |
 | Tamanho das mensagens lidas | `!tamanho N` | `"tamanho_maximo": N` |
 | Fila de fala | `!fila N` | `"fila_maxima": N` |
 | Tamanho da fila de pedidos | `!limitepedidos N` | `"pedidos_maximos": N` |
@@ -447,12 +511,14 @@ configurações. Os comandos de chat que mudam uma configuração gravam no
 | "@fulano não está ao vivo agora" | Normal: o programa espera e conecta sozinho quando a live começar. |
 | "Não achei a live de @fulano" | O usuário pode estar errado: troque na página de configurações (ou `tiktok_usuario` no `config.json`) e abra o programa de novo. Quem nunca fez live também vê essa mensagem até começar a primeira. |
 | O Windows diz "O Windows protegeu o computador" | Clique em **Mais informações → Executar assim mesmo** (acontece porque o programa não tem assinatura digital). |
-| A voz não fala nada | A voz neural precisa de internet. Sem internet, use `"voz": "windows"`. Veja também se alguém usou `!mudo`. |
+| A voz não fala nada | Veja se alguém usou `!mudo` e se apareceu algum erro de voz na janela. Sem internet, o programa já passa sozinho para a voz do Windows. |
+| A voz mudou para a do Windows sozinha | A voz da internet falhou (conexão ou serviço fora do ar). O programa tenta de novo a cada minuto e volta sozinho. |
 | `!np`/`!pp`/`!rank` respondem "Não consegui ver o osu agora" | Veja se a janela do tosu está aberta (se não, abra o `tosu\tosu.exe`) e confira em http://127.0.0.1:24050 |
 | Aparece "tosu não encontrado na pasta tosu" | Falta o `tosu.exe` dentro da pasta `tosu`, ao lado do programa. Extraia o zip de novo (ou rode o `instalar.bat`). O chat funciona; só os comandos do osu! não respondem. |
 | Aparece "o relógio do computador está X minutos adiantado" (ou atrasado) | O programa já usa a hora da internet e funciona normal. Para acertar o Windows: Configurações → Hora e idioma → Data e hora → **Sincronizar agora**. |
 | Mudei o `config.json` e nada mudou | Feche e abra o programa de novo. Veja também se apareceu um aviso de erro no `config.json` ao abrir. |
 | A planilha não salvou | Feche o Excel e encerre o programa de novo. |
+| Um som não toca | Veja se alguém usou `!mudo`, se o som não está desligado e se não tocou outro som há menos de 10 segundos (`espera_som`). Se a janela mostrar "não consegui abrir", o arquivo está estragado ou não é um `.mp3`/`.wav` de verdade. |
 | Quero testar sem estar ao vivo | Aperte **T** na contagem ao abrir o programa (ou digite `teste` no lugar do usuário do TikTok). O que você digitar na janela entra como mensagem do chat (`Fulano: oi` manda como outra pessoa; `sair` fecha). |
 
 ---

@@ -6,18 +6,21 @@ Uso:
     (sem o @; fica guardado no config.json. Se a live não começou ou cair, ele espera e volta sozinho)
 
 Comandos do chat (as respostas são faladas):
-    Todo mundo:  !comandos  !mensagens  !top  !copiar <texto>
+    Todo mundo:  !comandos  !mensagens  !top  !sons
+                 e os comandos de som do config.json ("sons": {"ai": "ai.mp3"} -> !ai)
     Você e MODERADORES:  !mudo  !voltar  !limpar  !velocidade <-10 a 10>  !volume <0 a 100>
-                         !apelido <usuário> <apelido>
+                         !apelido <usuário> <apelido>  !copiar <texto>
                          !voz <francisca, antonio, maria...>  !nomes  !bloquear <palavra>
-                         !desbloquear <palavra>  !ligar <comando>  !desligar <comando>
+                         !desbloquear <palavra>  !silenciar <nome ou usuário>  !liberar <nome ou usuário>
+                         !ligar <comando>  !desligar <comando>
                          !avisos <mapa ou recorde>  !espera <segundos>  !tamanho <letras>  !fila <mensagens>
+                         !esperasom <segundos>
     Só você:  !mod <usuário>  !desmod <usuário>
     (o que estes comandos mudam fica gravado no config.json)
 
 Pedidos de mapas do osu! (a fila fica salva em pedidos.txt):
-    Todo mundo:  !pedir <link, nome, código do set ou d + código da dificuldade>  !pedidos
-    Você e MODERADORES:  !proximo (abre no navegador)  !fecharpedidos
+    Todo mundo:  !pedir <link, nome, código do set ou d + código da dificuldade>  !pedidos  !cancelar
+    Você e MODERADORES:  !proximo (abre no navegador)  !remover <posição>  !fecharpedidos
                          !abrirpedidos  !zerarpedidos  !limitepedidos <número>
                          !filapedidos (liga/desliga a fila: desligada, cada pedido vai direto para o osu!)
 
@@ -31,11 +34,11 @@ Configurações: pelo config.json ou pela página http://localhost:8765 (WEB_POR
 """
 
 import atexit
+import base64
 import csv
 import http.server
 import ipaddress
 import os
-import queue
 import re
 import subprocess
 import sys
@@ -45,6 +48,7 @@ import json
 import urllib.parse
 import urllib.request
 import webbrowser
+from collections import deque
 from datetime import datetime, timedelta, timezone
 
 from TikTokLive import TikTokLiveClient
@@ -62,6 +66,16 @@ TIKTOK_USUARIO = ""     # seu usuário do TikTok, sem @ (perguntado e guardado n
 #   "pt-BR-AntonioNeural"             masculina
 #   "pt-PT-RaquelNeural"              feminina (Portugal)
 #   "pt-PT-DuarteNeural"              masculina (Portugal)
+#   "en-US-AvaMultilingualNeural"     feminina, EUA, fala português com sotaque
+#   "en-US-EmmaMultilingualNeural"    feminina, EUA, fala português com sotaque
+#   "en-US-BrianMultilingualNeural"   masculina, EUA, fala português com sotaque
+#   "en-AU-WilliamMultilingualNeural" masculina, Austrália, fala português com sotaque
+#   "fr-FR-VivienneMultilingualNeural" feminina, França, fala português com sotaque
+#   "fr-FR-RemyMultilingualNeural"    masculina, França, fala português com sotaque
+#   "de-DE-SeraphinaMultilingualNeural" feminina, Alemanha, fala português com sotaque
+#   "de-DE-FlorianMultilingualNeural" masculina, Alemanha, fala português com sotaque
+#   "it-IT-GiuseppeMultilingualNeural" masculina, Itália, fala português com sotaque
+#   "ko-KR-HyunsuMultilingualNeural"  masculina, Coreia, fala português com sotaque
 #   "windows"                         voz Maria do Windows (funciona offline)
 VOZ = "pt-BR-FranciscaNeural"
 VELOCIDADE = 1          # -10 (lento) a 10 (rápido)
@@ -70,11 +84,17 @@ LER_NOME = True         # falar "Fulano disse: ..." antes da mensagem
 TAMANHO_MAXIMO = 200    # corta mensagens muito longas
 FILA_MAXIMA = 15        # se o chat estiver muito rápido, descarta as mais antigas
 PALAVRAS_BLOQUEADAS = []  # ex.: ["spam", "palavrão"]
+USUARIOS_SILENCIADOS = []  # usuários (sem @) que a voz não lê e cujos comandos são ignorados
 
 # Comandos do chat (veja a lista completa em tratar_comando)
 PREFIXO = "!"
 MODERADORES = []        # usuários (sem @) que podem usar os comandos de moderação, além de você
 ESPERA_COMANDO = 15     # segundos que cada pessoa espera entre um comando e outro
+ESPERA_SOM = 10         # depois de um som (!ai), segundos até o chat poder tocar outro
+# comandos de som: "comando": "arquivo da pasta sons" (aceita caminho completo). Os arquivos destes vêm no zip.
+SONS = {"ai": "ai-ai-ai.mp3", "ban": "banido_FzWiL58.mp3", "banido": "banido_FzWiL58.mp3",
+        "quecano": "metal-pipe-clang.mp3", "cano": "metal-pipe-clang.mp3", "zap": "som-do-zap-zap-estourado.mp3",
+        "fah": "fahhhhhhhhhhhhhh.mp3"}
 PEDIDOS_MAXIMOS = 30    # tamanho máximo da fila de pedidos de mapas do osu!
 FILA_PEDIDOS = True     # False: cada !pedir vai direto para o seu chat do osu!, sem fila e sem a voz anunciar
 COMANDOS_DESATIVADOS = []  # comandos desligados, sem o "!". ex.: ["copiar", "top"]
@@ -94,23 +114,28 @@ WEB_REDE_LOCAL = False  # True: abre também no celular/outro PC da mesma rede (
 ABRIR_PAGINA = True     # abrir a página no navegador quando o programa começa
 # ------------------------------------------------
 
-fila: "queue.Queue[str]" = queue.Queue()
+# O que a voz vai falar. Respostas e avisos passam na frente do chat: quem usou um comando
+# não pode esperar a fila inteira de mensagens, nem ter a resposta descartada por elas.
+fila_avisos = deque()   # textos
+fila_chat = deque()     # (usuário em minúsculo, texto)
+tem_fala = threading.Condition()
 
 # ---------------- Registro de quem entrou / mensagens ----------------
 # Pasta do programa: ao lado do .exe quando empacotado, senão ao lado deste arquivo
 PASTA = os.path.dirname(sys.executable if getattr(sys, "frozen", False) else os.path.abspath(__file__))
 PASTA_REGISTROS = os.path.join(PASTA, "registros")
 ARQUIVO_CONFIG = os.path.join(PASTA, "config.json")
+PASTA_SONS = os.path.join(PASTA, "sons")  # onde ficam os arquivos dos SONS (a página grava aqui)
 
 # nome no config.json -> variável aqui do programa
 OPCOES = {nome.lower(): nome for nome in (
     "TIKTOK_USUARIO", "VOZ", "VELOCIDADE", "VOLUME", "LER_NOME", "TAMANHO_MAXIMO", "FILA_MAXIMA", "PALAVRAS_BLOQUEADAS",
-    "PREFIXO", "MODERADORES", "ESPERA_COMANDO", "PEDIDOS_MAXIMOS", "FILA_PEDIDOS", "COMANDOS_DESATIVADOS",
+    "USUARIOS_SILENCIADOS", "PREFIXO", "MODERADORES", "ESPERA_COMANDO", "ESPERA_SOM", "SONS", "PEDIDOS_MAXIMOS", "FILA_PEDIDOS", "COMANDOS_DESATIVADOS",
     "TOSU_URL", "AVISAR_MAPA", "AVISAR_RECORDE", "OSU_USUARIO", "OSU_IRC_SENHA", "WEB_PORTA", "WEB_REDE_LOCAL", "ABRIR_PAGINA")}
 OPCOES_ANTIGAS = ("janela_pedidos",)  # opções de versões anteriores: ignoradas sem aviso
 SECRETAS = ("osu_irc_senha",)  # a página nunca mostra: só diz se tem uma salva e deixa trocar
 LIMITES = {"VELOCIDADE": (-10, 10), "VOLUME": (0, 100), "TAMANHO_MAXIMO": (1, None), "FILA_MAXIMA": (1, None),
-           "ESPERA_COMANDO": (0, None), "PEDIDOS_MAXIMOS": (1, None), "WEB_PORTA": (0, 65535)}
+           "ESPERA_COMANDO": (0, None), "ESPERA_SOM": (0, None), "PEDIDOS_MAXIMOS": (1, None), "WEB_PORTA": (0, 65535)}
 
 
 def config_atual() -> dict:
@@ -133,6 +158,7 @@ def mudar_config(mudancas: dict) -> list:
             salvar_config()
         except OSError as e:
             avisos.append(f"mudei agora, mas não consegui gravar o config.json ({e}).")
+    esquecer_silenciados()
     for aviso in avisos:
         print(f"*** {aviso}")
     return avisos
@@ -154,12 +180,17 @@ def aplicar_config(config: dict) -> list:
         ok = isinstance(valor, esperado) and not (esperado is int and isinstance(valor, bool))
         if ok and esperado is list:
             ok = all(isinstance(x, str) for x in valor)
+        if ok and esperado is dict:
+            ok = all(isinstance(k, str) and isinstance(v, str) for k, v in valor.items())
         if not ok:
             avisos.append(f"\"{chave}\" deveria ser {TIPOS.get(esperado, esperado.__name__)}. "
                           f"Mantive: {json.dumps(atual, ensure_ascii=False)}")
             continue
         if nome == "TIKTOK_USUARIO":
             valor = valor.strip().lstrip("@")
+        if nome == "SONS":
+            valor, avisos_sons = conferir_sons(valor)
+            avisos += avisos_sons
         if nome == "PREFIXO" and not valor.strip():
             avisos.append(f"\"{chave}\" não pode ficar vazio. Mantive: {json.dumps(atual, ensure_ascii=False)}")
             continue
@@ -197,6 +228,8 @@ def carregar_config():
     avisos = aplicar_config(config)
     for aviso in avisos:
         print(f"*** config.json: {aviso}")
+    for aviso in sons_configurados()[1]:
+        print(f"*** som {aviso}")
     # versão nova com opções novas: acrescenta só elas, com o valor padrão, sem mexer no resto.
     # Com algum aviso não grava, para não apagar o que a pessoa ainda precisa corrigir.
     novas = [chave for chave in OPCOES if chave not in {c.lower() for c in config}]
@@ -208,7 +241,8 @@ def carregar_config():
             pass
 
 
-TIPOS = {bool: "true ou false", int: "um número inteiro (sem vírgula)", str: "um texto entre aspas", list: "uma lista entre [ ]"}
+TIPOS = {bool: "true ou false", int: "um número inteiro (sem vírgula)", str: "um texto entre aspas", list: "uma lista entre [ ]",
+         dict: "uma lista de \"nome\": \"valor\" entre { }"}
 pessoas = {}  # unique_id -> {"nome", "entrou", "mensagens"}
 trava = threading.Lock()
 mudou = False
@@ -279,14 +313,27 @@ def salvador_automatico(arquivo):
             pass  # arquivo aberto no Excel; tenta de novo depois
 
 
-def tocar_mp3(caminho: str):
-    """Toca um mp3 usando o player nativo do Windows (MCI) e espera terminar."""
+def tocar_mp3(caminho: str, enquanto=None):
+    """Toca um mp3 (ou wav) com o player nativo do Windows (MCI) e espera terminar.
+    enquanto: chamada sem parar durante o som (o narrador usa para já baixar a próxima fala)."""
     import ctypes
     mci = ctypes.windll.winmm.mciSendStringW
-    mci(f'open "{caminho}" type mpegvideo alias fala', None, 0, None)
-    mci(f"setaudio fala volume to {VOLUME * 10}", None, 0, None)
-    mci("play fala wait", None, 0, None)
-    mci("close fala", None, 0, None)
+    if mci(f'open "{caminho}" type mpegvideo alias fala', None, 0, None):
+        raise OSError(f"não consegui abrir {os.path.basename(caminho)}")
+    try:
+        mci(f"setaudio fala volume to {VOLUME * 10}", None, 0, None)
+        if enquanto is None:
+            mci("play fala wait", None, 0, None)
+            return
+        mci("play fala", None, 0, None)
+        estado = ctypes.create_unicode_buffer(32)
+        while True:
+            enquanto()
+            if mci("status fala mode", estado, 32, None) or estado.value not in ("playing", "seeking"):
+                break
+            time.sleep(0.05)
+    finally:
+        mci("close fala", None, 0, None)
 
 
 def voz_windows():
@@ -301,28 +348,115 @@ def voz_windows():
     return voz
 
 
+ESPERA_VOZ_NEURAL = 10  # segundos que uma fala pode levar para vir da internet antes de desistir (normal: 1 a 2)
+PAUSA_VOZ_NEURAL = 60   # depois de uma falha, segundos sem tentar a voz neural (cada tentativa pode demorar)
+
+
+def apagar_arquivo(caminho: str):
+    try:
+        os.remove(caminho)
+    except OSError:
+        pass
+
+
 def narrador():
     """Thread que fala as mensagens da fila, uma de cada vez.
-    VOZ, VELOCIDADE e VOLUME são lidos a cada fala, para valer o que mudar durante a live."""
+    Enquanto uma fala toca, a próxima da fila já vai sendo baixada, para não ter espera entre elas.
+    VOZ, VELOCIDADE e VOLUME são lidos a cada fala, para valer o que mudar durante a live.
+    Se a voz neural falhar, a mensagem sai na voz do Windows, e a neural é tentada de novo depois."""
     import asyncio
+    import glob
+    import itertools
     import tempfile
+    from concurrent.futures import ThreadPoolExecutor
     import edge_tts
+    from edge_tts.exceptions import NoAudioReceived
 
-    caminho = os.path.join(tempfile.gettempdir(), "tiktok_fala.mp3")
-    sapi = None  # só criada se a voz "windows" for usada
-    while True:
-        texto = fila.get()
+    pasta = tempfile.gettempdir()
+    for velho in glob.glob(os.path.join(pasta, "tiktok_fala*.mp3")):  # sobras de quando o programa fechou falando
+        apagar_arquivo(velho)
+    numeros = itertools.count()
+    baixador = ThreadPoolExecutor(max_workers=2, thread_name_prefix="voz")
+    preparadas = {}  # (texto, voz, velocidade) -> a fala sendo baixada (ou já baixada) antes da vez dela
+    sapi = None  # só criada se a voz do Windows for usada
+    tentar_neural_em = 0.0  # até esta hora a voz neural falhou há pouco: usa a do Windows direto
+    em_reserva = False      # já avisou que está na voz do Windows
+
+    def falar_windows(frase: str):
+        nonlocal sapi
+        if sapi is None:
+            sapi = voz_windows()
+        sapi.Rate = VELOCIDADE
+        sapi.Volume = VOLUME
+        sapi.Speak(frase)
+
+    def baixar(texto: str, voz: str, taxa: str) -> str:
+        caminho = os.path.join(pasta, f"tiktok_fala_{next(numeros)}.mp3")
         try:
-            if VOZ == "windows":
-                if sapi is None:
-                    sapi = voz_windows()
-                sapi.Rate = VELOCIDADE
-                sapi.Volume = VOLUME
-                sapi.Speak(texto)
-            else:
-                taxa = f"{VELOCIDADE * 10:+d}%"
-                asyncio.run(edge_tts.Communicate(texto, VOZ, rate=taxa).save(caminho))
-                tocar_mp3(caminho)
+            asyncio.run(asyncio.wait_for(edge_tts.Communicate(texto, voz, rate=taxa).save(caminho),
+                                         ESPERA_VOZ_NEURAL))
+        except BaseException:
+            apagar_arquivo(caminho)
+            raise
+        return caminho
+
+    def chave(texto: str) -> tuple:
+        return texto, VOZ, f"{VELOCIDADE * 10:+d}%"
+
+    def descartar(fala):
+        """Fala baixada antes da hora que não vai mais ser usada (a voz mudou, ou o !limpar apagou a fila)."""
+        if not fala.cancel():
+            fala.add_done_callback(lambda f: f.exception() is None and apagar_arquivo(f.result()))
+
+    def preparar_proxima():
+        """Chamada enquanto uma fala toca: já baixa a próxima da fila. Uma resposta que chega no meio
+        passa na frente, e é ela que passa a ser baixada."""
+        if VOZ == "windows" or time.time() < tentar_neural_em:
+            return
+        with tem_fala:
+            proxima = fila_avisos[0] if fila_avisos else fila_chat[0][1] if fila_chat else None
+        if not isinstance(proxima, str) or chave(proxima) in preparadas:
+            return
+        while len(preparadas) >= 3:  # guarda poucas: a fila muda o tempo todo
+            descartar(preparadas.pop(next(iter(preparadas))))
+        preparadas[chave(proxima)] = baixador.submit(baixar, *chave(proxima))
+
+    while True:
+        texto = proxima_fala()
+        try:
+            if isinstance(texto, tuple):  # ("som", arquivo): um !ai, por exemplo
+                tocar_mp3(texto[1], preparar_proxima)
+                continue
+            if VOZ == "windows" or time.time() < tentar_neural_em:
+                falar_windows(texto)
+                continue
+            fala = preparadas.pop(chave(texto), None) or baixador.submit(baixar, *chave(texto))
+            try:
+                caminho = fala.result()
+            except NoAudioReceived:
+                # o serviço respondeu, mas o texto não tem nada para falar (só símbolos, por exemplo)
+                print(f"[nada para falar em: {texto}]")
+                continue
+            except Exception as e:
+                # sem internet ou serviço fora do ar: a mensagem não se perde, sai na voz do Windows
+                tentar_neural_em = time.time() + PAUSA_VOZ_NEURAL
+                for f in preparadas.values():  # as já baixadas vão sair na voz do Windows
+                    descartar(f)
+                preparadas.clear()
+                if not em_reserva:
+                    em_reserva = True
+                    print(f"*** A voz da internet falhou ({type(e).__name__}: {e}). Usando a voz do Windows "
+                          f"e tentando de novo a cada {PAUSA_VOZ_NEURAL} segundos.")
+                    falar_windows("A voz da internet falhou. Vou usar a voz do Windows.")
+                falar_windows(texto)
+                continue
+            if em_reserva:
+                em_reserva = False
+                print("[a voz da internet voltou]")
+            try:
+                tocar_mp3(caminho, preparar_proxima)
+            finally:
+                apagar_arquivo(caminho)
         except Exception as e:
             print(f"[erro na voz: {e}]")
 
@@ -352,22 +486,64 @@ def limpar(texto: str) -> str:
     return texto[:TAMANHO_MAXIMO].strip()
 
 
-def falar(texto: str):
-    """Coloca na fila de fala; se o chat estiver muito rápido, descarta as mais antigas."""
-    while fila.qsize() >= FILA_MAXIMA:
-        try:
-            fila.get_nowait()
-        except queue.Empty:
-            break
-    fila.put(texto)
+def tem_palavra_bloqueada(texto: str) -> bool:
+    return any(p.lower() in texto.lower() for p in PALAVRAS_BLOQUEADAS)
+
+
+def nome_para_falar(nome: str) -> str:
+    """O nome do TikTok também é lido em voz alta e aparece na fila: com palavra bloqueada, não sai."""
+    return "Alguém" if tem_palavra_bloqueada(nome) else nome
+
+
+def falar(texto):
+    """Resposta ou aviso: passa na frente do chat. Com respostas demais, descarta as mais antigas."""
+    with tem_fala:
+        while len(fila_avisos) >= FILA_MAXIMA:
+            fila_avisos.popleft()
+        fila_avisos.append(texto)
+        tem_fala.notify()
+
+
+def tocar_som(caminho: str):
+    """Som de um comando (!ai): entra na fila como as respostas, para não tocar por cima da voz."""
+    falar(("som", caminho))
+
+
+def falar_chat(uid: str, texto: str):
+    """Mensagem do chat; se o chat estiver muito rápido, descarta as mais antigas."""
+    with tem_fala:
+        while len(fila_chat) >= FILA_MAXIMA:
+            fila_chat.popleft()
+        fila_chat.append((uid, texto))
+        tem_fala.notify()
+
+
+def proxima_fala():
+    """Espera ter algo para falar e devolve: primeiro as respostas e os avisos, depois o chat.
+    Um som vem como ("som", arquivo); o resto é o texto."""
+    with tem_fala:
+        while not fila_avisos and not fila_chat:
+            tem_fala.wait()
+        return fila_avisos.popleft() if fila_avisos else fila_chat.popleft()[1]
 
 
 def limpar_fila():
-    while True:
-        try:
-            fila.get_nowait()
-        except queue.Empty:
-            return
+    with tem_fala:
+        fila_avisos.clear()
+        fila_chat.clear()
+
+
+def lista_silenciados() -> set:
+    return {u.strip().lstrip("@").lower() for u in USUARIOS_SILENCIADOS}
+
+
+def esquecer_silenciados():
+    """Tira da fila o que os silenciados já tinham mandado, senão a voz continuaria lendo por um tempo."""
+    silenciados = lista_silenciados()
+    with tem_fala:
+        restantes = [m for m in fila_chat if m[0] not in silenciados]
+        fila_chat.clear()
+        fila_chat.extend(restantes)
 
 
 def salvar_apelido(uid: str, apelido: str):
@@ -543,9 +719,18 @@ def mandar_no_osu(texto: str) -> str:
         return "não consegui mandar no chat do osu!"
 
 
+def guardar_pedido(p: dict):
+    """Fila desligada e o pedido não chegou ao osu!: guarda na fila para não se perder (sem o limite da
+    fila nem o de um por pessoa, porque a pessoa já foi atendida). Sai com o !proximo."""
+    pedidos.append(p)
+    salvar_pedidos()
+    if not pausado:
+        falar(f"Pedido de {p['nome']} guardado na fila: não consegui mandar para o osu.")
+
+
 def abrir_pedido(p: dict, navegador: bool = True):
     """Manda o pedido no seu chat do osu! (se configurado). Senão, ou se der erro: abre no navegador
-    (!proximo) ou só deixa o link na janela (fila desligada, para não abrir o navegador no meio do mapa)."""
+    (!proximo) ou guarda na fila (fila desligada, para não abrir o navegador no meio do mapa)."""
     if OSU_USUARIO.strip() and OSU_IRC_SENHA.strip():
         # no chat do osu!, [link texto] vira o texto clicável. Colchetes no texto quebrariam o link.
         rotulo = p["texto"] if "beatmapsets?q=" in p["url"] else "abrir o mapa"  # link ou código: sem texto útil
@@ -555,11 +740,14 @@ def abrir_pedido(p: dict, navegador: bool = True):
             print("  (mandado no seu chat do osu!)")
             return
         if not navegador:
-            print(f"*** {erro}. O link do pedido está logo acima.")
+            print(f"*** {erro}. Guardei o pedido na fila: ele sai com o {PREFIXO}proximo.")
+            guardar_pedido(p)
             return
         print(f"*** {erro}. Abrindo no navegador.")
     elif not navegador:
-        print("  (para os pedidos irem para o osu!, preencha o nome e a senha de IRC na página de configurações)")
+        print(f"  (guardei na fila: ele sai com o {PREFIXO}proximo. Para os pedidos irem direto para o osu!, "
+              "preencha o nome e a senha de IRC na página de configurações)")
+        guardar_pedido(p)
         return
     webbrowser.open(p["url"])
 
@@ -697,10 +885,11 @@ def vigia_osu():
 pausado = False         # !mudo / !voltar
 ultimo_comando = {}     # unique_id -> horário do último comando (anti-spam)
 
-COMANDOS_PUBLICOS = ["np", "pp", "rank", "recorde", "pedir", "pedidos", "mensagens", "top", "copiar"]
-COMANDOS_MOD = ["mudo", "voltar", "limpar", "apelido", "velocidade", "volume", "voz", "nomes", "bloquear",
-                "desbloquear", "ligar", "desligar", "avisos", "espera", "tamanho", "fila",
-                "proximo", "fecharpedidos", "abrirpedidos", "zerarpedidos", "limitepedidos", "filapedidos"]
+COMANDOS_PUBLICOS = ["np", "pp", "rank", "recorde", "pedir", "pedidos", "cancelar", "mensagens", "top", "sons"]
+# !copiar é só de mods: com ele, qualquer um trocaria o seu Ctrl+C por um texto malicioso sem você perceber
+COMANDOS_MOD = ["mudo", "voltar", "limpar", "apelido", "copiar", "velocidade", "volume", "voz", "nomes", "bloquear",
+                "desbloquear", "silenciar", "liberar", "ligar", "desligar", "avisos", "espera", "tamanho", "fila",
+                "esperasom", "proximo", "remover", "fecharpedidos", "abrirpedidos", "zerarpedidos", "limitepedidos", "filapedidos"]
 COMANDOS_DONO = ["mod", "desmod"]  # só você: se um mod pudesse criar mods, qualquer um daria acesso a qualquer um
 # atalhos: !vol 70 é o mesmo que !volume 70. Desligar um comando desliga os atalhos dele também.
 APELIDOS_COMANDO = {
@@ -720,31 +909,38 @@ DESCRICAO_COMANDO = {
     "recorde": "Fala o maior PP que você fez nesta live e em qual mapa.",
     "pedir": "Pede um mapa: pelo link, pelo nome, pelo código do set (123456 ou s123456) ou da dificuldade (d1234567 ou b1234567). Pelo nome, a busca mostra mapas de qualquer status, ranqueados ou não.",
     "pedidos": "Fala quantos pedidos tem na fila e a posição de quem perguntou.",
+    "cancelar": "Tira da fila o pedido de quem usou o comando. Serve para corrigir um pedido errado.",
     "mensagens": "Fala quantas mensagens a pessoa mandou nesta live.",
     "top": "Fala as 3 pessoas que mais mandaram mensagem na live.",
-    "copiar": "Copia o texto para o seu Ctrl+C. Qualquer pessoa pode trocar o que você copiou.",
-    "mudo": "Para de ler o chat e apaga o que estava esperando. Respostas e avisos também param.",
+    "sons": "Fala a lista de sons. Cada som é um comando, como !ai; você cria os sons mais abaixo, em Sons.",
+    "copiar": "Copia o texto para o seu Ctrl+C. Só você e os mods podem usar, para ninguém trocar o que você copiou.",
+    "mudo": "Para de ler o chat e apaga o que estava esperando. Respostas e avisos também param, mas os pedidos de mapas continuam entrando na fila.",
     "voltar": "Volta a ler o chat depois do !mudo.",
     "limpar": "Apaga as mensagens que estavam esperando para serem lidas.",
     "apelido": "Dá um apelido para alguém (ex.: apelido fulano Aninha). A voz passa a chamar a pessoa assim.",
     "velocidade": "Muda a velocidade da voz, de -10 a 10.",
     "volume": "Muda o volume da voz, de 0 a 100.",
-    "voz": "Troca a voz: francisca, thalita, antonio, raquel, duarte ou maria. Sem nome, fala a lista.",
+    "voz": "Troca a voz: francisca, thalita, antonio, raquel, duarte ou maria. Com sotaque de gringo: ava, emma, brian, william, "
+           "vivienne, remy, seraphina, florian, giuseppe ou hyunsu. Sem nome, fala a lista.",
     "nomes": "Liga ou desliga o \"Fulano disse:\" antes das mensagens.",
     "bloquear": "Bloqueia uma palavra: mensagens com ela não são lidas em voz alta.",
     "desbloquear": "Desbloqueia uma palavra.",
+    "silenciar": "A voz para de ler uma pessoa e os comandos dela são ignorados. Aceita o nome que aparece no chat ou o usuário. Não vale para você e os mods.",
+    "liberar": "Tira alguém dos silenciados.",
     "ligar": "Religa um comando desligado (nome sem o símbolo).",
     "desligar": "Desliga um comando (nome sem o símbolo). O ligar e o desligar não podem ser desligados pelo chat.",
     "avisos": "Com mapa ou recorde, liga ou desliga esse aviso. Sozinho, fala como os avisos estão.",
     "espera": "Muda quantos segundos cada pessoa espera entre um comando e outro (anti-spam).",
+    "esperasom": "Muda quantos segundos o chat espera entre um som e outro.",
     "tamanho": "Muda quantas letras de cada mensagem são lidas.",
     "fila": "Muda quantas mensagens podem ficar esperando a voz.",
     "proximo": "Manda o próximo pedido no seu chat do osu! (ou abre no navegador) e fala de quem é.",
+    "remover": "Tira da fila o pedido daquela posição (ex.: remover 3), sem abrir o mapa.",
     "fecharpedidos": "Para de aceitar pedidos.",
     "abrirpedidos": "Volta a aceitar pedidos.",
     "zerarpedidos": "Apaga a fila de pedidos inteira.",
     "limitepedidos": "Muda o tamanho máximo da fila de pedidos.",
-    "filapedidos": "Liga ou desliga a fila. Desligada, cada pedido vai direto para o seu chat do osu!.",
+    "filapedidos": "Liga ou desliga a fila. Desligada, cada pedido vai direto para o seu chat do osu!; se não conseguir mandar, ele fica guardado na fila.",
     "mod": "Torna alguém moderador (usuário do TikTok, sem @).",
     "desmod": "Tira alguém dos moderadores.",
 }
@@ -757,22 +953,85 @@ def desativado(cmd: str) -> bool:
 
 FALADO = {"proximo": "próximo", "fecharpedidos": "fechar pedidos", "abrirpedidos": "abrir pedidos",
           "zerarpedidos": "zerar pedidos", "limitepedidos": "limite pedidos",
-          "filapedidos": "fila pedidos"}  # como a voz fala cada comando
+          "filapedidos": "fila pedidos", "esperasom": "espera som"}  # como a voz fala cada comando
 
 # !voz francisca -> nome da voz no config
 VOZES = {"francisca": "pt-BR-FranciscaNeural", "thalita": "pt-BR-ThalitaMultilingualNeural",
          "antonio": "pt-BR-AntonioNeural", "antônio": "pt-BR-AntonioNeural", "raquel": "pt-PT-RaquelNeural",
-         "duarte": "pt-PT-DuarteNeural", "maria": "windows", "windows": "windows"}
+         "duarte": "pt-PT-DuarteNeural", "maria": "windows", "windows": "windows",
+         # vozes de outros países: falam português com sotaque
+         "ava": "en-US-AvaMultilingualNeural", "emma": "en-US-EmmaMultilingualNeural",
+         "brian": "en-US-BrianMultilingualNeural", "william": "en-AU-WilliamMultilingualNeural",
+         "vivienne": "fr-FR-VivienneMultilingualNeural", "remy": "fr-FR-RemyMultilingualNeural",
+         "seraphina": "de-DE-SeraphinaMultilingualNeural", "florian": "de-DE-FlorianMultilingualNeural",
+         "giuseppe": "it-IT-GiuseppeMultilingualNeural", "hyunsu": "ko-KR-HyunsuMultilingualNeural"}
 
 # comandos que mudam um número: comando -> (opção do config, o que a voz responde)
 NUMERICOS = {
     "velocidade": ("velocidade", "Velocidade {}."),
     "volume": ("volume", "Volume {}."),
     "espera": ("espera_comando", "Agora cada pessoa espera {} segundos entre um comando e outro."),
+    "esperasom": ("espera_som", "Agora o chat espera {} segundos entre um som e outro."),
     "tamanho": ("tamanho_maximo", "Vou ler até {} letras de cada mensagem."),
     "fila": ("fila_maxima", "A fila de fala agora guarda até {} mensagens."),
     "limitepedidos": ("pedidos_maximos", "A fila de pedidos agora aceita até {}."),
 }
+
+
+# ---------------- Sons: comandos que tocam um áudio (SONS no config.json) ----------------
+EXTENSOES_SOM = (".mp3", ".wav")
+TAMANHO_MAXIMO_SOM = 5 * 1024 * 1024  # arquivo que a página aceita (5 MB já é um áudio bem longo)
+ultimo_som = 0.0  # horário do último som que o chat tocou (para o ESPERA_SOM)
+
+
+def nome_de_som(texto: str) -> str:
+    """'Ai Que Susto' -> 'aiquesusto': o nome vira comando, então fica minúsculo, sem espaços nem símbolos."""
+    return re.sub(r"\W", "", texto.lower())
+
+
+def nome_reservado(nome: str) -> bool:
+    """Nome de um comando do programa: o comando ganha do som."""
+    return nome in TODOS_COMANDOS or nome in APELIDOS_COMANDO
+
+
+def conferir_sons(sons: dict) -> tuple:
+    """Arruma os nomes dos comandos de som ("!Ai" -> "ai") e tira os que não dão.
+    Devolve (sons arrumados, avisos)."""
+    limpos, avisos = {}, []
+    for comando, arquivo in sons.items():
+        nome = nome_de_som(comando.lstrip(PREFIXO))
+        if not nome or not arquivo.strip():
+            avisos.append(f"o som \"{comando}\" precisa de um nome (letras ou números) e de um arquivo. Ignorei.")
+        elif nome_reservado(nome):
+            avisos.append(f"\"{comando}\" já é um comando do programa: dê outro nome para esse som. Ignorei.")
+        elif nome in limpos:
+            avisos.append(f"o som \"{comando}\" aparece duas vezes. Usei o primeiro.")
+        else:
+            limpos[nome] = arquivo.strip()
+    return limpos, avisos
+
+
+def caminho_do_som(arquivo: str) -> str:
+    """Só o nome do arquivo = está na pasta sons; senão, o caminho completo que a pessoa escreveu."""
+    return arquivo if os.path.isabs(arquivo) else os.path.join(PASTA_SONS, arquivo)
+
+
+def sons_configurados() -> tuple:
+    """Devolve ({comando: arquivo}, [avisos dos sons cujo arquivo não existe]).
+    O arquivo é conferido a cada vez: se a pessoa colocar o arquivo durante a live, já vale."""
+    sons, faltando = {}, []
+    for nome, arquivo in SONS.items():
+        caminho = caminho_do_som(arquivo)
+        if os.path.isfile(caminho):
+            sons[nome] = caminho
+        else:
+            faltando.append(f"{PREFIXO}{nome}: não achei o arquivo {arquivo}")
+    return sons, faltando
+
+
+def sons_disponiveis() -> dict:
+    return sons_configurados()[0]
+
 
 
 def ajuda(lista, titulo: str) -> str:
@@ -783,9 +1042,35 @@ def ajuda(lista, titulo: str) -> str:
     return f"{titulo}: {texto}. Use com exclamação, por exemplo: exclamação {nomes[0]}."
 
 
+def eh_moderador(uid: str, dono: str) -> bool:
+    return uid == dono.lower() or uid in [m.lstrip("@").lower() for m in MODERADORES]
+
+
+def silenciado(uid: str, dono: str) -> bool:
+    return uid in lista_silenciados() and not eh_moderador(uid, dono)
+
+
+def achar_pessoa(texto: str) -> tuple:
+    """O usuário de quem o mod citou, pelo @ ou pelo nome que aparece no chat (o mod só vê o nome).
+    Devolve (usuário em minúsculo ou "", visto nesta live ou nos apelidos, tem mais de uma pessoa com o nome)."""
+    alvo = texto.strip().lstrip("@").lower()
+    apelidos = carregar_apelidos()
+    with trava:
+        vistos = {uid.lower(): p["nome"] for uid, p in pessoas.items()}
+    if alvo in vistos or alvo in apelidos:
+        return alvo, True, False
+    achados = {uid for uid, nome in vistos.items() if nome.lower() == alvo}
+    achados |= {uid for uid, apelido in apelidos.items() if apelido.lower() == alvo}
+    if len(achados) > 1:
+        return "", False, True
+    if achados:
+        return achados.pop(), True, False
+    return ("" if " " in alvo else alvo), False, False
+
+
 def tratar_comando(user, nome: str, texto: str, dono: str) -> bool:
     """Executa um comando do chat. Retorna True se era um comando (e não deve ser lido)."""
-    global pausado, pedidos_abertos
+    global pausado, pedidos_abertos, ultimo_som
     if not texto.startswith(PREFIXO):
         return False
     partes = texto[len(PREFIXO):].split(maxsplit=1)
@@ -801,7 +1086,7 @@ def tratar_comando(user, nome: str, texto: str, dono: str) -> bool:
     if desativado(cmd):
         return True  # comando desligado em COMANDOS_DESATIVADOS: ignora calado
     eh_dono = uid == dono.lower()
-    eh_mod = eh_dono or uid in [m.lstrip("@").lower() for m in MODERADORES]
+    eh_mod = eh_moderador(uid, dono)
 
     # --- só você (o dono da live) ---
     if eh_dono and cmd in ("mod", "desmod"):
@@ -842,11 +1127,50 @@ def tratar_comando(user, nome: str, texto: str, dono: str) -> bool:
                 falar("Use: exclamação apelido, o usuário do TikTok sem arroba e o apelido.")
                 return True
             alvo = partes[0].lstrip("@").lower()
-            if any(p.lower() in apelido.lower() for p in PALAVRAS_BLOQUEADAS):
+            if tem_palavra_bloqueada(apelido):
                 falar("Esse apelido não pode.")
                 return True
             salvar_apelido(alvo, apelido)
             falar(f"Beleza, agora vou chamar {alvo} de {apelido}.")
+            return True
+        if cmd == "copiar":
+            if not arg:
+                falar("Escreve o que quer copiar depois do comando.")
+                return True
+            try:
+                copiar_texto(arg)  # texto original, sem cortar links
+                print(f"[copiado de {nome}: {arg}]")
+                falar(f"Copiei a mensagem de {nome}.")
+            except OSError as e:
+                print(f"[não deu para copiar: {e}]")
+            return True
+        if cmd in ("silenciar", "liberar"):
+            if not arg:
+                falar(f"Use: exclamação {cmd} e o nome ou o usuário da pessoa.")
+                return True
+            alvo, visto, repetido = achar_pessoa(arg)
+            if repetido:
+                falar("Tem mais de uma pessoa com esse nome. Use o usuário do TikTok, sem arroba.")
+                return True
+            # a voz nunca repete quem é: o nome da pessoa pode ser justamente o problema
+            outros = [u for u in USUARIOS_SILENCIADOS if u.strip().lstrip("@").lower() != alvo]
+            if cmd == "liberar":
+                if not alvo or len(outros) == len(USUARIOS_SILENCIADOS):
+                    falar("Essa pessoa não estava silenciada.")
+                    return True
+                mudar_config({"usuarios_silenciados": outros})
+                print(f"[liberado: @{alvo}]")
+                falar("Pessoa liberada.")
+                return True
+            if not alvo:
+                falar("Não achei essa pessoa nesta live. Use o usuário do TikTok, sem arroba.")
+            elif eh_moderador(alvo, dono):
+                falar("Você e os moderadores não podem ser silenciados.")
+            else:
+                mudar_config({"usuarios_silenciados": outros + [alvo]})
+                print(f"[silenciado: @{alvo}]")
+                falar("Pessoa silenciada." if visto else
+                      "Não vi essa pessoa nesta live, mas silenciei esse usuário. Confira se está certo.")
             return True
         if cmd in NUMERICOS:
             chave, resposta = NUMERICOS[cmd]
@@ -862,7 +1186,8 @@ def tratar_comando(user, nome: str, texto: str, dono: str) -> bool:
             voz = VOZES.get(arg.lower()) or next((v for v in VOZES.values() if v.lower() == arg.lower()), None)
             if not voz:
                 falar("Vozes: Francisca, Thalita, Antonio, Raquel, Duarte e Maria, que funciona sem internet. "
-                      "Use: exclamação voz e o nome.")
+                      "Com sotaque de gringo: Ava, Emma, Brian, William, Vivienne, Remy, Seraphina, Florian, "
+                      "Giuseppe e Hyunsu. Use: exclamação voz e o nome.")
                 return True
             mudar_config({"voz": voz})
             falar("Voz trocada.")
@@ -890,7 +1215,7 @@ def tratar_comando(user, nome: str, texto: str, dono: str) -> bool:
         if cmd in ("ligar", "desligar"):
             alvo = arg.lstrip(PREFIXO).lower()
             alvo = APELIDOS_COMANDO.get(alvo, alvo)
-            if alvo not in TODOS_COMANDOS:
+            if alvo not in TODOS_COMANDOS and alvo not in sons_disponiveis():
                 falar(f"Use: exclamação {cmd} e o nome de um comando, sem a exclamação.")
                 return True
             if alvo in PROTEGIDOS:
@@ -923,6 +1248,18 @@ def tratar_comando(user, nome: str, texto: str, dono: str) -> bool:
             print(f"[pedido de {p['nome']}: {p['texto']}]\n  {p['url']}")
             falar(f"Próximo pedido, de {p['nome']}. Faltam {len(pedidos)}.")
             return True
+        if cmd == "remover":
+            try:
+                p = pedidos.pop(int(arg) - 1) if int(arg) > 0 else None
+            except (ValueError, IndexError):
+                p = None
+            if not p:
+                falar(f"Use: exclamação remover e a posição na fila. Tem {len(pedidos)} na fila.")
+                return True
+            salvar_pedidos()
+            print(f"[pedido removido, de {p['nome']}: {p['texto']}]")
+            falar(f"Pedido de {p['nome']} removido. Faltam {len(pedidos)}.")
+            return True
         if cmd in ("fecharpedidos", "abrirpedidos"):
             pedidos_abertos = cmd == "abrirpedidos"
             falar("Pedidos abertos!" if pedidos_abertos else "Pedidos fechados.")
@@ -942,15 +1279,30 @@ def tratar_comando(user, nome: str, texto: str, dono: str) -> bool:
         return True  # comando de moderação vindo de quem não pode: ignora calado
 
     # --- comandos de todo mundo ---
-    if cmd != "comandos" and cmd not in COMANDOS_PUBLICOS:
+    sons = sons_disponiveis()
+    if cmd != "comandos" and cmd not in COMANDOS_PUBLICOS and cmd not in sons:
         return False
     agora = time.time()
-    if not eh_mod and agora - ultimo_comando.get(uid, 0) < ESPERA_COMANDO:
-        return True  # anti-spam: ignora calado
-    ultimo_comando[uid] = agora
-    if pausado:
+    if cmd in sons and not eh_mod and agora - ultimo_som < ESPERA_SOM:
+        return True  # outro som tocou há pouco: ignora calado (e a pessoa não perde a vez dela)
+    # cancelar o próprio pedido não espera nem conta como comando: quem errou o pedido corrige logo.
+    # Não vira spam porque, para cancelar de novo, a pessoa precisa de outro !pedir, e esse espera.
+    pedido_meu = next((i for i, p in enumerate(pedidos) if p["uid"] == uid), None) if cmd == "cancelar" else None
+    if pedido_meu is None:
+        if not eh_mod and agora - ultimo_comando.get(uid, 0) < ESPERA_COMANDO:
+            return True  # anti-spam: ignora calado
+        ultimo_comando[uid] = agora
+    # no mudo a voz fica calada, mas os pedidos não podem se perder
+    if pausado and cmd not in ("pedir", "cancelar"):
         return True
+    # no mudo, a resposta aparece só na janela
+    dizer = (lambda frase: print(f"  (no mudo, não falei: {frase})")) if pausado else falar
 
+    if cmd in sons:
+        ultimo_som = agora
+        print(f"[som {PREFIXO}{cmd}, de {nome}]")
+        tocar_som(sons[cmd])
+        return True
     if cmd == "comandos":
         # mods: "!comandos" = moderação, "!comandos chat" = os de todo mundo, "!comandos todos" = tudo
         qual = arg.lower() if eh_mod else ""
@@ -964,15 +1316,23 @@ def tratar_comando(user, nome: str, texto: str, dono: str) -> bool:
                   " Os de todo mundo: exclamação comandos chat. Todos: exclamação comandos todos.")
         else:
             falar(ajuda(COMANDOS_PUBLICOS, "Comandos"))
+    elif cmd == "sons":
+        nomes = [n for n in sons if not desativado(n)]
+        if not nomes:
+            falar("Ainda não tem nenhum som.")
+        else:
+            lista = ", ".join(nomes[:-1]) + " e " + nomes[-1] if len(nomes) > 1 else nomes[0]
+            falar(f"Sons: {lista}. Use com exclamação, por exemplo: exclamação {nomes[0]}.")
     elif cmd == "mensagens":
         with trava:
             n = pessoas.get(user.unique_id, {}).get("mensagens", 0)
         falar(f"{nome}, você mandou {n} {'mensagem' if n == 1 else 'mensagens'} nesta live.")
     elif cmd == "top":
         with trava:
-            top = sorted(pessoas.items(), key=lambda kv: -kv[1]["mensagens"])[:3]
+            top = sorted((kv for kv in pessoas.items() if not silenciado(kv[0].lower(), dono)),
+                         key=lambda kv: -kv[1]["mensagens"])[:3]
         apelidos = carregar_apelidos()
-        nomes = [f"{apelidos.get(u.lower(), p['nome'])}, com {p['mensagens']}"
+        nomes = [f"{nome_para_falar(apelidos.get(u.lower(), p['nome']))}, com {p['mensagens']}"
                  for u, p in top if p["mensagens"]]
         falar("Quem mais falou: " + "; ".join(nomes) + "." if nomes else "Ninguém falou ainda.")
     elif cmd == "recorde":
@@ -1001,29 +1361,41 @@ def tratar_comando(user, nome: str, texto: str, dono: str) -> bool:
     elif cmd == "pedir":
         meu = next((i for i, p in enumerate(pedidos, 1) if p["uid"] == uid), None)
         if not pedidos_abertos:
-            falar(f"{nome}, os pedidos estão fechados agora.")
+            dizer(f"{nome}, os pedidos estão fechados agora.")
         elif not arg:
-            falar(f"{nome}, manda o link, o nome ou o código do mapa depois do comando.")
+            dizer(f"{nome}, manda o link, o nome ou o código do mapa depois do comando.")
         elif not FILA_PEDIDOS:  # sem fila: vai direto para o chat do osu!, sem a voz anunciar
-            if any(p.lower() in arg.lower() for p in PALAVRAS_BLOQUEADAS):
-                falar(f"{nome}, esse pedido não pode.")
+            if tem_palavra_bloqueada(arg):
+                dizer(f"{nome}, esse pedido não pode.")
                 return True
             p = {"uid": uid, "nome": nome, "texto": arg, "url": link_do_pedido(arg)}
             print(f"[pedido de {nome}: {arg}]\n  {p['url']}")
             threading.Thread(target=abrir_pedido, args=(p, False), daemon=True).start()
         elif meu:
-            falar(f"{nome}, você já tem um pedido na fila, na posição {meu}.")
+            dizer(f"{nome}, você já tem um pedido na fila, na posição {meu}.")
         elif len(pedidos) >= PEDIDOS_MAXIMOS:
-            falar(f"{nome}, a fila de pedidos está cheia.")
-        elif any(p.lower() in arg.lower() for p in PALAVRAS_BLOQUEADAS):
-            falar(f"{nome}, esse pedido não pode.")
+            dizer(f"{nome}, a fila de pedidos está cheia.")
+        elif tem_palavra_bloqueada(arg):
+            dizer(f"{nome}, esse pedido não pode.")
         else:
             pedidos.append({"uid": uid, "nome": nome, "texto": arg, "url": link_do_pedido(arg)})
             salvar_pedidos()
             print(f"[novo pedido de {nome}: {arg}]")
-            falar(f"Pedido de {nome} anotado, posição {len(pedidos)}.")
+            dizer(f"Pedido de {nome} anotado, posição {len(pedidos)}.")
+    elif cmd == "cancelar":
+        if pedido_meu is None:
+            dizer(f"{nome}, você não tem pedido na fila.")
+        else:
+            p = pedidos.pop(pedido_meu)
+            salvar_pedidos()
+            print(f"[pedido cancelado por {nome}: {p['texto']}]")
+            falta = 0 if eh_mod else ESPERA_COMANDO - (agora - ultimo_comando.get(uid, 0))
+            dizer(f"{nome}, pedido cancelado." +
+                  (f" Pode pedir de novo em {int(falta) + 1} segundos." if falta > 0 else ""))
     elif cmd == "pedidos" and not FILA_PEDIDOS:
+        n = len(pedidos)  # os que não conseguiram ir para o osu! e ficaram guardados
         falar("A fila de pedidos está desligada: os pedidos vão direto para o osu." +
+              (f" Tem {n} {'guardado' if n == 1 else 'guardados'} na fila." if n else "") +
               ("" if pedidos_abertos else " Os pedidos estão fechados."))
     elif cmd == "pedidos":
         meu = next((i for i, p in enumerate(pedidos, 1) if p["uid"] == uid), None)
@@ -1035,16 +1407,6 @@ def tratar_comando(user, nome: str, texto: str, dono: str) -> bool:
         if not pedidos_abertos:
             texto += " Os pedidos estão fechados."
         falar(texto)
-    elif cmd == "copiar":
-        if not arg:
-            falar(f"{nome}, escreve o que quer copiar depois do comando.")
-            return True
-        try:
-            copiar_texto(arg)  # texto original, sem cortar links
-            print(f"[copiado de {nome}: {arg}]")
-            falar(f"Copiei a mensagem de {nome}.")
-        except OSError as e:
-            print(f"[não deu para copiar: {e}]")
     return True
 
 
@@ -1086,11 +1448,78 @@ class PaginaConfig(http.server.BaseHTTPRequestHandler):
         def grupo(titulo, cmds):
             return {"titulo": titulo, "comandos": [{"cmd": c, "descricao": DESCRICAO_COMANDO.get(c, ""),
                                                     "atalhos": atalhos.get(c, [])} for c in cmds]}
-        return {"config": config, "comandos": TODOS_COMANDOS, "apelidos": APELIDOS_COMANDO,
-                "grupos": [grupo("Todo mundo", ["comandos"] + COMANDOS_PUBLICOS),
-                           grupo("Você e os moderadores", COMANDOS_MOD),
-                           grupo("Só você", COMANDOS_DONO)],
-                "senha_salva": bool(OSU_IRC_SENHA.strip())}
+        sons, faltando = sons_configurados()
+        grupos = [grupo("Todo mundo", ["comandos"] + COMANDOS_PUBLICOS),
+                  grupo("Você e os moderadores", COMANDOS_MOD),
+                  grupo("Só você", COMANDOS_DONO)]
+        if sons:
+            grupos.append({"titulo": "Sons (todo mundo)", "comandos": [
+                {"cmd": n, "descricao": f"Toca {SONS[n]}.", "atalhos": []} for n in sons]})
+        return {"config": config, "comandos": TODOS_COMANDOS, "apelidos": APELIDOS_COMANDO, "grupos": grupos,
+                "sons": [{"nome": n, "arquivo": a, "existe": n in sons} for n, a in SONS.items()],
+                "sons_faltando": faltando, "senha_salva": bool(OSU_IRC_SENHA.strip())}
+
+    def mexer_nos_sons(self, d: dict):
+        """Página: tocar, apagar ou adicionar um som. Devolve (resposta, código)."""
+        acao = d.get("acao")
+        nome = nome_de_som(str(d.get("nome", "")))
+        if acao in ("tocar", "apagar") and nome not in SONS:
+            return {"erro": "Não achei esse som. Clique em Recarregar."}, 404
+        if acao == "tocar":
+            caminho = sons_disponiveis().get(nome)
+            if not caminho:
+                return {"erro": f"Não achei o arquivo {SONS[nome]} na pasta sons."}, 404
+            tocar_som(caminho)
+            return {"mensagem": f"Tocando {PREFIXO}{nome}."}, 200
+        if acao == "apagar":
+            arquivo = SONS[nome]
+            mudar_config({"sons": {n: a for n, a in SONS.items() if n != nome}})
+            print(f"[som {PREFIXO}{nome} apagado pela página]")
+            mensagem = f"Som {PREFIXO}{nome} apagado."
+            # o arquivo só vai embora se for da pasta sons e nenhum outro som usar
+            if not os.path.isabs(arquivo) and arquivo not in SONS.values():
+                try:
+                    os.remove(caminho_do_som(arquivo))
+                except FileNotFoundError:
+                    pass
+                except OSError:
+                    mensagem += f" O arquivo {arquivo} ficou na pasta sons (talvez estivesse tocando)."
+            return {"mensagem": mensagem, **self.dados_da_pagina()}, 200
+        if acao != "adicionar":
+            return {"erro": "dados inválidos"}, 400
+        ext = str(d.get("extensao", "")).lower()
+        if not nome:
+            return {"erro": "Dê um nome ao som, com letras ou números."}, 400
+        if len(nome) > 20:
+            return {"erro": "Nome comprido demais: use até 20 letras."}, 400
+        if nome_reservado(nome):
+            return {"erro": f"{PREFIXO}{nome} já é um comando do programa. Escolha outro nome."}, 400
+        if nome in SONS:
+            return {"erro": f"Já tem um som {PREFIXO}{nome}. Apague o antigo antes, ou use outro nome."}, 400
+        if ext not in EXTENSOES_SOM:
+            return {"erro": "Use um arquivo .mp3 ou .wav."}, 400
+        try:
+            conteudo = base64.b64decode(str(d.get("arquivo", "")), validate=True)
+        except ValueError:
+            return {"erro": "O arquivo chegou estragado. Tente de novo."}, 400
+        if not conteudo:
+            return {"erro": "O arquivo está vazio."}, 400
+        if len(conteudo) > TAMANHO_MAXIMO_SOM:
+            return {"erro": "Arquivo grande demais: o limite é 5 MB."}, 400
+        arquivo = nome + ext
+        numero = 2
+        while os.path.exists(caminho_do_som(arquivo)):  # não estraga um arquivo que já estava na pasta
+            arquivo = f"{nome}_{numero}{ext}"
+            numero += 1
+        try:
+            os.makedirs(PASTA_SONS, exist_ok=True)
+            with open(caminho_do_som(arquivo), "xb") as saida:
+                saida.write(conteudo)
+        except OSError as e:
+            return {"erro": f"Não consegui gravar o arquivo ({e})."}, 500
+        mudar_config({"sons": {**SONS, nome: arquivo}})
+        print(f"[som {PREFIXO}{nome} criado pela página]")
+        return {"mensagem": f"Pronto: {PREFIXO}{nome} já funciona no chat.", **self.dados_da_pagina()}, 200
 
     def do_GET(self):
         caminho = urllib.parse.urlsplit(self.path).path.rstrip("/") or "/"
@@ -1113,15 +1542,20 @@ class PaginaConfig(http.server.BaseHTTPRequestHandler):
 
     def do_POST(self):
         # exigir JSON faz o navegador barrar envios vindos de outros sites
-        if not self.host_ok() or self.path != "/api/config" or \
+        if not self.host_ok() or self.path not in ("/api/config", "/api/sons") or \
                 not (self.headers.get("Content-Type") or "").startswith("application/json"):
             return self.responder(403, "text/plain; charset=utf-8", b"acesso negado")
         try:
-            dados = json.loads(self.rfile.read(int(self.headers.get("Content-Length", 0))).decode("utf-8"))
+            tamanho = int(self.headers.get("Content-Length", 0))
+            if tamanho > TAMANHO_MAXIMO_SOM * 2:  # o arquivo vem em base64, que ocupa 4/3 do tamanho
+                return self.responder_json({"erro": "Arquivo grande demais: o limite é 5 MB."}, 413)
+            dados = json.loads(self.rfile.read(tamanho).decode("utf-8"))
             if not isinstance(dados, dict):
                 raise ValueError
         except (ValueError, UnicodeDecodeError):
             return self.responder_json({"erro": "dados inválidos"}, 400)
+        if self.path == "/api/sons":
+            return self.responder_json(*self.mexer_nos_sons(dados))
         # senha em branco = continua a que já está salva (a página nunca recebe a senha para mandar de volta)
         dados = {k: v for k, v in dados.items()
                  if k.lower() not in SECRETAS or (isinstance(v, str) and v.strip())}
@@ -1178,7 +1612,8 @@ async function atualizar() {
     return;  // programa fechado: mantém o que estava na tela e tenta de novo
   }
   const n = d.pedidos.length;
-  $("estado").textContent = !d.fila ? "(direto no osu!)" : !d.abertos ? "(fechados)" : n ? `(${n})` : "";
+  $("estado").textContent = !d.fila ? (n ? `(${n} ${n === 1 ? "guardado" : "guardados"})` : "(direto no osu!)") :
+    !d.abertos ? "(fechados)" : n ? `(${n})` : "";
   $("lista").replaceChildren(...d.pedidos.slice(0, MAX).map((p, i) => {
     const li = document.createElement("li");
     const mapa = /^d?\\s*\\d+$/i.test(p.texto.trim()) ? "#" + p.texto.trim() : p.texto;
@@ -1273,6 +1708,12 @@ label.check input { margin-top: 4px; }
 .cmds label input { margin-top: 4px; }
 .cmds code { font-weight: 700; font-size: 15px; }
 .cmds .atalhos { color: var(--suave); font-size: 13px; }
+.som { display: flex; gap: 8px; align-items: center; padding: 6px 0; border-top: 1px solid var(--borda); }
+.som span { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.som button { padding: 5px 12px; }
+.novo { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+.novo input[type=text] { flex: 1 1 140px; width: auto; }
+.novo input[type=file] { flex: 1 1 200px; min-width: 0; }
 .barra { position: fixed; left: 0; right: 0; bottom: 0; background: var(--cartao); border-top: 1px solid var(--borda);
   padding: 12px 16px; display: flex; gap: 10px; align-items: center; justify-content: center; flex-wrap: wrap; }
 button { font: inherit; padding: 9px 18px; border-radius: 6px; border: 1px solid var(--borda); background: var(--fundo);
@@ -1318,6 +1759,16 @@ button.principal { background: var(--destaque); border-color: var(--destaque); c
       <option value="pt-PT-RaquelNeural">Raquel (feminina, Portugal)</option>
       <option value="pt-PT-DuarteNeural">Duarte (masculina, Portugal)</option>
       <option value="windows">Maria do Windows (funciona sem internet)</option>
+      <option value="en-US-AvaMultilingualNeural">Ava (feminina, EUA, sotaque de gringo)</option>
+      <option value="en-US-EmmaMultilingualNeural">Emma (feminina, EUA, sotaque de gringo)</option>
+      <option value="en-US-BrianMultilingualNeural">Brian (masculina, EUA, sotaque de gringo)</option>
+      <option value="en-AU-WilliamMultilingualNeural">William (masculina, Austrália, sotaque de gringo)</option>
+      <option value="fr-FR-VivienneMultilingualNeural">Vivienne (feminina, França, sotaque de gringo)</option>
+      <option value="fr-FR-RemyMultilingualNeural">Remy (masculina, França, sotaque de gringo)</option>
+      <option value="de-DE-SeraphinaMultilingualNeural">Seraphina (feminina, Alemanha, sotaque de gringo)</option>
+      <option value="de-DE-FlorianMultilingualNeural">Florian (masculina, Alemanha, sotaque de gringo)</option>
+      <option value="it-IT-GiuseppeMultilingualNeural">Giuseppe (masculina, Itália, sotaque de gringo)</option>
+      <option value="ko-KR-HyunsuMultilingualNeural">Hyunsu (masculina, Coreia, sotaque de gringo)</option>
     </select>
     <label for="velocidade">Velocidade<small>De -10 (bem lenta) a 10 (bem rápida). No chat: !velocidade 5 ou !vel 5.</small></label>
     <div class="faixa"><input type="range" id="velocidade" min="-10" max="10" step="1"><output for="velocidade"></output></div>
@@ -1334,6 +1785,8 @@ button.principal { background: var(--destaque); border-color: var(--destaque); c
     <input type="number" id="fila_maxima" min="1">
     <label for="palavras_bloqueadas">Palavras bloqueadas<small>Uma por linha. Mensagens com elas não são lidas em voz alta, e pedidos com elas são recusados. No chat: !bloquear palavra.</small></label>
     <textarea id="palavras_bloqueadas"></textarea>
+    <label for="usuarios_silenciados">Pessoas silenciadas<small>Usuários do TikTok, sem @, um por linha. A voz não lê essas pessoas e os comandos delas são ignorados. Não vale para você e os mods. No chat: !silenciar nome e !liberar nome.</small></label>
+    <textarea id="usuarios_silenciados"></textarea>
   </section>
 
   <section>
@@ -1347,6 +1800,23 @@ button.principal { background: var(--destaque); border-color: var(--destaque); c
     <label>Comandos ligados<small>Desmarque para desligar um comando (e os atalhos dele). Desligado, ele é
       ignorado em silêncio e sai do !comandos.</small></label>
     <div class="cmds" id="cmds"></div>
+  </section>
+
+  <section>
+    <h2>Sons</h2>
+    <p class="sub" style="margin:4px 0 0">Cada som vira um comando que todo mundo pode usar: o som <b>ai</b> toca com
+      <code>!ai</code>. O <code>!sons</code> fala a lista. No mudo, os sons não tocam.</p>
+    <div id="lista_sons"></div>
+    <small id="sons_faltando" style="color:var(--erro)"></small>
+    <label for="som_nome">Novo som<small>O nome do comando (só letras e números) e um arquivo .mp3 ou .wav de até 5 MB.
+      O arquivo vai para a pasta <b>sons</b>, ao lado do programa, e o som fica no config.json, em "sons".</small></label>
+    <div class="novo">
+      <input type="text" id="som_nome" placeholder="ex.: ai" maxlength="20" autocomplete="off" spellcheck="false">
+      <input type="file" id="som_arquivo" accept=".mp3,.wav,audio/mpeg,audio/wav">
+      <button type="button" id="som_adicionar">Adicionar</button>
+    </div>
+    <label for="espera_som">Espera entre sons (segundos)<small>Depois de um som, o chat espera isso para tocar outro; os que chegarem antes são ignorados. Não vale para você e os mods. No chat: !esperasom 5.</small></label>
+    <input type="number" id="espera_som" min="0">
   </section>
 
   <section>
@@ -1390,12 +1860,70 @@ button.principal { background: var(--destaque); border-color: var(--destaque); c
 
 <script>
 const $ = id => document.getElementById(id);
-const LISTAS = ["palavras_bloqueadas", "moderadores"];
+const LISTAS = ["palavras_bloqueadas", "usuarios_silenciados", "moderadores"];
 let comandos = [], apelidos = {}, chaves = [];
+let base = {};  // como a página estava quando recebeu os dados: o que difere disto é o que a pessoa mudou
 
 function status(texto, erro) {
   $("status").textContent = texto;
   $("status").className = erro ? "erro" : "";
+}
+
+function el(tag, classe, texto) {
+  const e = document.createElement(tag);
+  if (classe) e.className = classe;
+  if (texto) e.textContent = texto;
+  return e;
+}
+
+function mostrarSons(d) {
+  const p = d.config.prefixo;
+  $("lista_sons").replaceChildren(...(d.sons.length ? d.sons.map(s => {
+    const linha = el("div", "som"), texto = el("span"), tocar = el("button", "", "Tocar"), apagar = el("button", "", "Apagar");
+    tocar.type = apagar.type = "button";
+    texto.append(el("code", "", p + s.nome), el("small", "", s.arquivo + (s.existe ? "" : " (arquivo não encontrado)")));
+    tocar.onclick = () => sons({acao: "tocar", nome: s.nome});
+    apagar.onclick = () => confirm("Apagar o som " + p + s.nome + "?") && sons({acao: "apagar", nome: s.nome});
+    linha.append(texto, tocar, apagar);
+    return linha;
+  }) : [el("small", "", "Nenhum som ainda.")]));
+  $("sons_faltando").textContent = d.sons_faltando.length ? "Estes não tocam, porque o arquivo não está na pasta sons: " +
+    d.sons_faltando.join("; ") + "." : "";
+}
+
+// tocar, apagar ou adicionar um som. Devolve true se deu certo.
+async function sons(pedido) {
+  try {
+    const r = await fetch("/api/sons", {method: "POST", headers: {"Content-Type": "application/json"},
+                                        body: JSON.stringify(pedido)});
+    const d = await r.json();
+    if (!r.ok) { status(d.erro || "Não deu certo.", true); return false; }
+    if (d.sons) {
+      // a lista de sons muda na hora; o resto só se não tiver nada esperando o Salvar
+      if (Object.keys(mudancas(base)).length) mostrarSons(d);
+      else preencher(d);
+    }
+    status(d.mensagem);
+    return true;
+  } catch (e) {
+    status("Não consegui falar com o programa. Ele está aberto?", true);
+    return false;
+  }
+}
+
+function adicionarSom() {
+  const arquivo = $("som_arquivo").files[0];
+  if (!arquivo) return status("Escolha um arquivo .mp3 ou .wav.", true);
+  const ponto = arquivo.name.lastIndexOf(".");
+  const nome = $("som_nome").value.trim() || arquivo.name.slice(0, ponto);
+  const leitor = new FileReader();
+  leitor.onload = async () => {
+    status("Enviando...");
+    const ok = await sons({acao: "adicionar", nome, extensao: arquivo.name.slice(ponto),
+                           arquivo: leitor.result.split(",")[1] || ""});
+    if (ok) { $("som_nome").value = ""; $("som_arquivo").value = ""; }
+  };
+  leitor.readAsDataURL(arquivo);
 }
 
 function atualizarFaixas() {
@@ -1419,12 +1947,6 @@ function preencher(d) {
     x = x.replace(/^!+/, "").toLowerCase();
     return apelidos[x] || x;
   }));
-  const el = (tag, classe, texto) => {
-    const e = document.createElement(tag);
-    if (classe) e.className = classe;
-    if (texto) e.textContent = texto;
-    return e;
-  };
   $("cmds").replaceChildren(...d.grupos.flatMap(g => [el("h3", "", g.titulo), ...g.comandos.map(x => {
     const l = el("label"), i = el("input"), texto = el("span");
     i.type = "checkbox"; i.value = x.cmd; i.checked = !desligados.has(x.cmd);
@@ -1434,10 +1956,12 @@ function preencher(d) {
     l.append(i, texto);
     return l;
   })]));
+  mostrarSons(d);
   $("osu_irc_senha").value = "";
   $("osu_irc_senha").placeholder = d.senha_salva ? "•••••••• (salva)" : "";
   $("senha_estado").textContent = d.senha_salva ? "Tem uma senha salva." : "Nenhuma senha salva ainda.";
   atualizarFaixas();
+  base = coletar();
 }
 
 function coletar() {
@@ -1466,11 +1990,33 @@ async function carregar() {
   }
 }
 
+// só o que a pessoa mudou nesta página: uma aba aberta há horas não pode desfazer o que o chat mudou
+function mudancas(atual) {
+  const c = coletar(), m = {};
+  const comando = x => { x = x.replace(/^!+/, "").toLowerCase(); return apelidos[x] || x; };
+  for (const k of Object.keys(c)) {
+    if (JSON.stringify(c[k]) === JSON.stringify(base[k])) continue;
+    if (!Array.isArray(c[k])) { m[k] = c[k]; continue; }
+    // lista: aplica o que entrou e o que saiu em cima da lista de agora, que o chat pode ter mudado
+    const chave = k === "comandos_desativados" ? comando : x => x.toLowerCase();
+    const antes = new Set(base[k].map(chave)), depois = new Set(c[k].map(chave));
+    const ficam = atual[k].filter(x => antes.has(chave(x)) ? depois.has(chave(x)) : true);
+    const tem = new Set(ficam.map(chave));
+    m[k] = ficam.concat(c[k].filter(x => !antes.has(chave(x)) && !tem.has(chave(x))));
+  }
+  return m;
+}
+
 async function salvar() {
   status("Salvando...");
   try {
+    const m = mudancas((await (await fetch("/api/config")).json()).config);
+    if (!Object.keys(m).length) {
+      await carregar();
+      return status("Nada para salvar: você não mudou nada aqui.");
+    }
     const r = await fetch("/api/config", {method: "POST", headers: {"Content-Type": "application/json"},
-                                          body: JSON.stringify(coletar())});
+                                          body: JSON.stringify(m)});
     const d = await r.json();
     if (!r.ok) throw new Error(d.erro || r.status);
     preencher(d);
@@ -1480,6 +2026,14 @@ async function salvar() {
     status("Não consegui salvar. O programa está aberto?", true);
   }
 }
+
+// ao voltar para a aba, mostra o que o chat mudou enquanto isso (sem apagar o que a pessoa está editando)
+addEventListener("focus", async () => {
+  if (Object.keys(mudancas(base)).length) return;
+  try {
+    preencher(await (await fetch("/api/config")).json());
+  } catch (e) {}
+});
 
 document.addEventListener("input", e => { if (e.target.type === "range") atualizarFaixas(); });
 $("link_pedidos").textContent = location.origin + "/pedidos";
@@ -1495,6 +2049,7 @@ $("copiar_link").onclick = async () => {
   }
 };
 $("salvar").onclick = salvar;
+$("som_adicionar").onclick = adicionarSom;
 $("recarregar").onclick = carregar;
 carregar();
 </script>
@@ -1506,15 +2061,20 @@ carregar();
 def processar_comentario(user, comentario: str, dono: str):
     """Um comentário do chat: comando ou mensagem para ler em voz alta."""
     nome = user.nick_name or user.unique_id
-    nome = carregar_apelidos().get((user.unique_id or "").lower(), nome)
+    uid = (user.unique_id or "").lower()
+    nome = carregar_apelidos().get(uid, nome)
     msg = limpar(comentario)
-    print(f"{nome}: {comentario}")
     registrar(user, mensagem=True)
+    if silenciado(uid, dono):
+        print(f"{nome} (silenciado): {comentario}")
+        return
+    print(f"{nome}: {comentario}")
+    nome = nome_para_falar(nome)
     if tratar_comando(user, nome, comentario.strip(), dono):
         return
-    if pausado or not msg or any(p.lower() in msg.lower() for p in PALAVRAS_BLOQUEADAS):
+    if pausado or not msg or tem_palavra_bloqueada(msg):
         return
-    falar(f"{nome} disse: {msg}" if LER_NOME else msg)
+    falar_chat(uid, f"{nome} disse: {msg}" if LER_NOME else msg)
 
 
 lidos = set()  # ids das mensagens já lidas: se a conexão cai e volta, o TikTok pode mandar de novo
@@ -1697,6 +2257,7 @@ def ficar_na_live(client, usuario: str):
 
 def main():
     carregar_config()
+    os.makedirs(PASTA_SONS, exist_ok=True)  # para a pessoa achar onde pôr os sons
     # antes de abrir o navegador e o tosu: as janelas deles roubam o foco e o T/U (ou o usuário
     # digitado na primeira vez) iria para elas em vez desta janela
     usuario = escolher_usuario()
@@ -1729,16 +2290,16 @@ def main():
         nonlocal ja_conectou
         if ja_conectou:
             print(f"Voltei para a live de @{usuario}! Lendo o chat...\n")
-            fila.put("Voltei a ler o chat da live.")
+            falar("Voltei a ler o chat da live.")
         else:
             print(f"Conectado à live de @{usuario}! Lendo o chat...\n")
-            fila.put("Conectado ao chat da live.")
+            falar("Conectado ao chat da live.")
         ja_conectou = True
 
     @client.on(DisconnectEvent)
     async def ao_desconectar(event: DisconnectEvent):
         print("Caiu a conexão com a live (ou a live acabou). Tentando voltar...")
-        fila.put("Caiu a conexão com a live. Tentando voltar.")
+        falar("Caiu a conexão com a live. Tentando voltar.")
 
     @client.on(CommentEvent)
     async def ao_comentar(event: CommentEvent):

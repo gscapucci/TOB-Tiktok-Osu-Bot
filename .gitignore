@@ -9,6 +9,13 @@ __pycache__/
 registros/
 apelidos.txt
 pedidos.txt
+# da pasta sons, só os sons padrão (os do SONS no leitor_chat.py) vão para o repositório
+sons/*
+!sons/ai-ai-ai.mp3
+!sons/banido_FzWiL58.mp3
+!sons/metal-pipe-clang.mp3
+!sons/som-do-zap-zap-estourado.mp3
+!sons/fahhhhhhhhhhhhhh.mp3
 
 # Anotações pessoais
 anotacoes.txt

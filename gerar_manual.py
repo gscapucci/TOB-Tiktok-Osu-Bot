@@ -265,13 +265,15 @@ s.append(tabela(["Comando", "O que faz"], [
                        "todo mundo e <b>!comandos todos</b> fala todos."],
     [cmd("!mensagens"), "Quantas mensagens a pessoa mandou nesta live."],
     [cmd("!top"), "As 3 pessoas que mais mandaram mensagem."],
-    [cmd("!copiar texto"), "Copia o texto para o seu Ctrl+C. É só dar Ctrl+V onde quiser."],
+    [cmd("!sons"), "Fala a lista de sons."],
+    [cmd("!ai"), "Toca o som <b>ai</b>. Cada som que você cria vira um comando (veja Sons, logo abaixo)."],
     [cmd("!np"), f"O mapa do osu! que você está jogando. {cmd('!mapa')} faz o mesmo."],
     [cmd("!pp"), "Quanto PP o mapa vale com os mods atuais."],
     [cmd("!rank"), "Seu rank global, PP e precisão."],
     [cmd("!recorde"), "O recorde de PP desta live."],
     [cmd("!pedir mapa"), "Pede um mapa do osu! (veja a seção 6)."],
     [cmd("!pedidos"), "Quantos pedidos tem na fila e a posição da pessoa."],
+    [cmd("!cancelar"), "Tira da fila o pedido de quem usou o comando, para corrigir um pedido errado."],
 ], [38, 132]))
 s.append(Spacer(1, 8))
 s.append(p("Exemplo", h2))
@@ -279,9 +281,23 @@ s.append(p(f"<b>Lucas</b> escreve {cmd('!mensagens')}"))
 s.append(fala("Lucas, você mandou 12 mensagens nesta live."))
 s.append(atencao("Cada pessoa só pode usar <b>um comando a cada 15 segundos</b>. Os comandos a mais "
                  "são ignorados, para ninguém lotar a voz. Você e os moderadores não têm esse limite."))
-s.append(caixa("Sobre o !copiar", "Qualquer pessoa pode usar, então alguém pode trocar o seu Ctrl+C "
-               "enquanto você copia outra coisa. Se atrapalhar, dá para desligar (seção 8).",
-               AMARELO_CLARO, AMARELO))
+s.append(p("Sons", h2))
+s.append(p(f"Você cria comandos que tocam um áudio: o som <b>ai</b> toca quando alguém escreve {cmd('!ai')}. "
+           "O som entra na fila da voz, então nunca toca por cima de uma fala. Os sons ficam no config.json, "
+           "em <b>sons</b> (o comando e o arquivo), e os arquivos na pasta <b>sons</b>. Tem dois jeitos de criar:"))
+s.append(passos([
+    ("Pela página de configurações", "Na parte <b>Sons</b>, escreva o nome do comando, escolha o arquivo "
+                                     "(.mp3 ou .wav, até 5 MB) e clique em <b>Adicionar</b>. A página copia o arquivo "
+                                     "e grava o som no config.json. Vale na hora. Ali também dá para tocar e apagar."),
+    ("Pelo config.json", "Coloque o arquivo na pasta <b>sons</b> e acrescente uma linha em <b>\"sons\"</b>, "
+                         "por exemplo <b>\"zap\": \"zap.mp3\"</b> (seção 9). Vale quando o programa abre de novo."),
+]))
+s.append(dica(f"O programa já vem com 7 sons: {cmd('!ai')}, {cmd('!ban')} e {cmd('!banido')}, {cmd('!cano')} e "
+              f"{cmd('!quecano')}, {cmd('!zap')} e {cmd('!fah')}. Os que você acrescentar não vêm no zip, então extrair uma "
+              "versão nova por cima não apaga os seus."))
+s.append(atencao(f"Depois de um som, os outros esperam <b>10 segundos</b> ({cmd('!esperasom 5')} muda), para o "
+                 "chat não virar uma mesa de som. Você e os mods não esperam. No !mudo, os sons não tocam. Um som "
+                 "com o nome de um comando do programa (como pedir) fica de fora."))
 
 # ---------- 5 ----------
 s += [PageBreak(), p("5. Comandos de moderação", h1),
@@ -290,12 +306,16 @@ s += [PageBreak(), p("5. Comandos de moderação", h1),
 s.append(p("Controlando a live", h2))
 s.append(tabela(["Comando", "O que faz"], [
     [cmd("!mudo"), "Para de ler o chat. Os avisos automáticos do osu! e as respostas dos comandos do "
-                   f"público (como {cmd('!np')} e {cmd('!top')}) também param."],
+                   f"público (como {cmd('!np')} e {cmd('!top')}) também param, mas os pedidos de mapas "
+                   "continuam entrando na fila, em silêncio."],
     [cmd("!voltar"), "Volta a ler o chat."],
     [cmd("!limpar"), "Apaga as mensagens que estavam esperando para serem lidas."],
     [cmd("!apelido fulano Aninha"), "A voz passa a chamar o usuário fulano de Aninha. O público não pode "
                                     "escolher o próprio apelido, senão a voz falaria qualquer coisa."],
+    [cmd("!copiar texto"), "Copia o texto para o seu Ctrl+C. É só dar Ctrl+V onde quiser. É só de você e dos "
+                           "moderadores, para ninguém trocar o que você copiou."],
     [cmd("!proximo"), "Abre o próximo pedido de mapa (seção 6)."],
+    [cmd("!remover 3"), "Tira da fila o pedido da posição 3, sem abrir o mapa."],
     [cmd("!fecharpedidos"), "Para de aceitar pedidos."],
     [cmd("!abrirpedidos"), "Volta a aceitar pedidos."],
     [cmd("!zerarpedidos"), "Apaga a fila de pedidos inteira."],
@@ -308,16 +328,20 @@ s.append(p("Estes ficam <b>gravados no config.json</b>, como se você tivesse mu
            "configurações. Assim os moderadores conseguem ajustar tudo de qualquer lugar, só pelo chat."))
 s.append(tabela(["Comando", "O que faz"], [
     [cmd("!voz antonio"), "Troca a voz: francisca, thalita, antonio, raquel, duarte ou maria (do Windows, "
-                          f"funciona sem internet). Só {cmd('!voz')} fala a lista."],
+                          f"funciona sem internet). Com sotaque de gringo: ava, emma, brian, william, vivienne, remy, seraphina, florian, giuseppe ou hyunsu. Só {cmd('!voz')} fala a lista."],
     [cmd("!velocidade 5"), "Muda a velocidade da voz, de -10 (lenta) a 10 (rápida)."],
     [cmd("!volume 70"), "Muda o volume, de 0 a 100."],
     [cmd("!nomes"), "Liga ou desliga o “Fulano disse:” antes das mensagens."],
     [cmd("!bloquear palavra"), "Mensagens com essa palavra deixam de ser lidas. A voz não repete a palavra."],
     [cmd("!desbloquear palavra"), "Volta a ler mensagens com essa palavra."],
+    [cmd("!silenciar Fulano"), "A voz para de ler a pessoa e os comandos dela são ignorados. Aceita o nome que "
+                               "aparece no chat ou o usuário. A voz não repete quem foi. Não vale para você e os mods."],
+    [cmd("!liberar Fulano"), "Tira a pessoa dos silenciados."],
     [cmd("!desligar copiar"), f"Desliga um comando (o nome vai sem o !). {cmd('!ligar copiar')} liga de novo."],
     [cmd("!avisos mapa"), f"Liga ou desliga o aviso de mapa novo. {cmd('!avisos recorde')} faz o mesmo com o "
                           f"aviso de recorde. Só {cmd('!avisos')} fala como estão."],
     [cmd("!espera 10"), "Segundos que cada pessoa espera entre um comando e outro."],
+    [cmd("!esperasom 5"), "Segundos entre um som e outro, para o chat todo."],
     [cmd("!tamanho 150"), "Quantas letras de cada mensagem são lidas."],
     [cmd("!fila 10"), "Quantas mensagens podem ficar esperando a voz."],
     [cmd("!limitepedidos 20"), "Quantos pedidos cabem na fila."],
@@ -405,7 +429,8 @@ s.append(dica("Se a senha estiver errada ou o osu! não responder, a janela do p
               "pedido abre no navegador, como antes."))
 s.append(p("Regras da fila", h2))
 s += itens([
-    "Cada pessoa pode ter <b>um pedido por vez</b> na fila.",
+    f"Cada pessoa pode ter <b>um pedido por vez</b> na fila. Errou? {cmd('!cancelar')} tira o pedido, e dá para "
+    f"pedir de novo. Você e os moderadores tiram qualquer um com {cmd('!remover 3')} (a posição na fila).",
     f"A fila aceita até <b>30 pedidos</b>. Você ou um moderador pode mudar com {cmd('!limitepedidos 20')}.",
     "A fila aparece no arquivo <b>pedidos.txt</b>, atualizado na hora. Dá para deixar aberto durante a live.",
     "Para o público ver a fila na live, com fundo transparente, <b>só na primeira vez</b>: no topo da página de "
@@ -422,8 +447,8 @@ s.append(p(f"Com {cmd('!filapedidos')} (você ou um moderador), a fila é deslig
            f"15 segundos entre comandos continuam valendo. {cmd('!filapedidos')} de novo liga a fila. "
            "Fica gravado (opção <b>fila_pedidos</b>)."))
 s.append(atencao("Sem fila, os pedidos só aparecem se o chat do osu! estiver configurado (veja acima). "
-                 "Se o envio falhar, o link fica só na janela do programa: o navegador não abre sozinho "
-                 "no meio da partida."))
+                 f"Se o envio falhar, a voz avisa e o pedido fica guardado na fila, para sair com o {cmd('!proximo')}: "
+                 "o navegador não abre sozinho no meio da partida."))
 
 # ---------- 7 ----------
 s += [PageBreak(), p("7. osu! ao vivo", h1),
@@ -504,6 +529,7 @@ s.append(tabela(["Função", "Durante a live", "No config.json"], [
     ["Velocidade da voz", cmd("!velocidade 5"), '"velocidade": 5'],
     ["Volume", cmd("!volume 70"), '"volume": 70'],
     ["Palavras bloqueadas", f"{cmd('!bloquear')} / {cmd('!desbloquear')}", '"palavras_bloqueadas": ["palavra"]'],
+    ["Pessoas silenciadas", f"{cmd('!silenciar')} / {cmd('!liberar')}", '"usuarios_silenciados": ["usuario"]'],
     ["Qualquer comando", f"{cmd('!desligar')} / {cmd('!ligar')}", '"comandos_desativados": ["copiar"]'],
     ["Aceitar pedidos", f"{cmd('!fecharpedidos')} / {cmd('!abrirpedidos')}", "—"],
     ["Fila de pedidos", cmd("!filapedidos"), '"fila_pedidos": true / false'],
@@ -511,6 +537,7 @@ s.append(tabela(["Função", "Durante a live", "No config.json"], [
     ["Aviso de recorde", cmd("!avisos recorde"), '"avisar_recorde": true / false'],
     ["Moderadores", f"{cmd('!mod')} / {cmd('!desmod')} (só você)", '"moderadores": ["usuario"]'],
     ["Tempo entre comandos", cmd("!espera 15"), '"espera_comando": 15'],
+    ["Tempo entre sons", cmd("!esperasom 10"), '"espera_som": 10'],
     ["Tamanho das mensagens", cmd("!tamanho 200"), '"tamanho_maximo": 200'],
     ["Fila de fala", cmd("!fila 15"), '"fila_maxima": 15'],
     ["Tamanho da fila de pedidos", cmd("!limitepedidos 30"), '"pedidos_maximos": 30'],
@@ -562,7 +589,7 @@ def opcoes(linhas):
 
 
 # valores longos demais para a coluna: descritos em palavras
-PADRAO_TEXTO = {"tosu_url": "<i>o endereço padrão do tosu</i>"}
+PADRAO_TEXTO = {"tosu_url": "<i>o endereço padrão do tosu</i>", "sons": "<i>os 7 sons padrão</i>"}
 
 
 s += [PageBreak(), p("9. O arquivo config.json", h1),
@@ -612,7 +639,9 @@ s.append(opcoes([
     ("voz", "Qual voz fala. Opções: <b>\"pt-BR-FranciscaNeural\"</b> (feminina), "
             "<b>\"pt-BR-ThalitaMultilingualNeural\"</b> (feminina), <b>\"pt-BR-AntonioNeural\"</b> (masculina), "
             "<b>\"pt-PT-RaquelNeural\"</b> (Portugal, feminina), <b>\"pt-PT-DuarteNeural\"</b> (Portugal, masculina) "
-            "ou <b>\"windows\"</b> (voz do Windows, funciona sem internet)."),
+            "ou <b>\"windows\"</b> (voz do Windows, funciona sem internet). Também há vozes de outros países que falam "
+            "português com sotaque, como <b>\"en-US-AvaMultilingualNeural\"</b> e <b>\"it-IT-GiuseppeMultilingualNeural\"</b> "
+            "(a lista completa aparece na página de configurações)."),
     ("velocidade", "Velocidade da voz, de <b>-10</b> (bem lenta) a <b>10</b> (bem rápida)."),
     ("volume", "Volume da voz, de <b>0</b> a <b>100</b>."),
     ("ler_nome", "<b>true</b>: fala “Fulano disse: mensagem”. <b>false</b>: fala só a mensagem."),
@@ -620,7 +649,9 @@ s.append(opcoes([
     ("fila_maxima", "Quantas mensagens podem ficar esperando a voz. Se o chat passar disso, "
                     "as mais antigas são puladas, para a voz não ficar atrasada."),
     ("palavras_bloqueadas", "Mensagens com qualquer uma dessas palavras não são lidas. "
+                            "Se o nome da pessoa tiver uma delas, a voz fala “Alguém”. "
                             "Ex.: <b>[\"spam\", \"feio\"]</b>."),
+    ("usuarios_silenciados", "Usuários do TikTok, sem @, que a voz não lê e cujos comandos são ignorados."),
 ]))
 s.append(Spacer(1, 8))
 s.append(p("<b>Comandos</b>", rotulo))
@@ -630,6 +661,9 @@ s.append(opcoes([
                     "Você, o dono da live, já pode sempre. Ex.: <b>[\"ana\", \"caio\"]</b>."),
     ("espera_comando", "Segundos que cada pessoa espera entre um comando e outro (anti-spam). "
                        "Não vale para você e os moderadores."),
+    ("espera_som", "Segundos entre um som e outro, para o chat todo. Não vale para você e os moderadores."),
+    ("sons", "Os comandos de som: o comando, sem o !, e o arquivo da pasta sons. "
+             "Ex.: <b>{\"ai\": \"ai.mp3\", \"zap\": \"zap.mp3\"}</b>. Mais fácil pela página, em Sons."),
     ("comandos_desativados", "Comandos desligados, sem o !. Eles passam a ser ignorados em silêncio "
                              "e saem do !comandos. Ex.: <b>[\"copiar\", \"top\"]</b>."),
 ]))
@@ -668,7 +702,7 @@ s.append(bloco(['"ler_nome": false,']))
 s.append(p("<b>Dois moderadores e sem o !copiar</b>", rotulo))
 s.append(bloco(['"moderadores": ["ana", "caio"],', '"comandos_desativados": ["copiar"],']))
 s.append(p("<b>Live sem osu! (só ler o chat)</b>", rotulo))
-s.append(bloco(['"comandos_desativados": ["np", "pp", "rank", "recorde", "pedir", "pedidos",',
+s.append(bloco(['"comandos_desativados": ["np", "pp", "rank", "recorde", "pedir", "pedidos", "cancelar", "remover",',
                 '                         "proximo", "fecharpedidos", "abrirpedidos", "zerarpedidos"],',
                 '"avisar_mapa": false,', '"avisar_recorde": false']))
 
@@ -705,6 +739,7 @@ s.append(tabela(["Arquivo", "O que tem"], [
                                             "copie para outra pasta a que quiser guardar."],
     ["<b>apelidos.txt</b>", "Os apelidos usados pela voz. Pode editar durante a live, vale na hora."],
     ["<b>pedidos.txt</b>", "A fila de pedidos de mapas, atualizada na hora."],
+    ["<b>sons\\</b>", "Os arquivos dos sons. Qual comando toca cada um fica no config.json, em sons."],
     ["<b>config.json</b>", "As configurações (seção 9). O programa cria na primeira vez que abre; "
                            "se apagar, ele cria de novo com os valores padrão."],
 ], [55, 115]))
@@ -723,7 +758,8 @@ s.append(tabela(["Problema", "Solução"], [
     ["Aparece <b>UserOfflineError</b>", "A live não está ao vivo ou o usuário está errado. Comece a live antes "
      "de abrir o programa. Para testar sem live, use o modo de teste (seção 3)."],
     ["“O Windows protegeu o computador”", "Clique em <b>Mais informações</b> e depois em <b>Executar assim mesmo</b>."],
-    ["A voz não fala nada", f"Confira a internet e se alguém usou {cmd('!mudo')}. Sem internet, use \"voz\": \"windows\" no config.json."],
+    ["A voz não fala nada", f"Veja se alguém usou {cmd('!mudo')} e se apareceu algum erro de voz na janela. Sem internet, o programa já passa sozinho para a voz do Windows."],
+    ["A voz mudou para a do Windows sozinha", "A voz da internet falhou (conexão ou serviço fora do ar). O programa tenta de novo a cada minuto e volta sozinho."],
     [f"{cmd('!np')}, {cmd('!pp')} ou {cmd('!rank')} respondem “Não consegui ver o osu agora”",
      "Veja se a janela do tosu está aberta (se não, abra o <b>tosu\\tosu.exe</b>) e confira em http://127.0.0.1:24050."],
     ["Aparece “tosu não encontrado na pasta tosu”", "Falta o <b>tosu.exe</b> dentro da pasta <b>tosu</b>, "

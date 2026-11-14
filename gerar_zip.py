@@ -6,8 +6,10 @@ Uso:
     (antes: gerar_exe.bat, gerar_manual.bat e gerar_licencas.py)
 
 O config.json, apelidos.txt, pedidos.txt e registros não vão no zip: são de quem usa,
-e assim extrair uma versão nova por cima não apaga nada disso.
+e assim extrair uma versão nova por cima não apaga nada disso. Da pasta sons, só vão os
+arquivos dos sons padrão (SONS no leitor_chat.py); os que a pessoa acrescentou continuam lá.
 """
+import ast
 import os
 import sys
 import zipfile
@@ -24,6 +26,19 @@ ARQUIVOS = {
     "tosu/tosu.exe": os.path.join(PASTA, "tosu", "tosu.exe"),  # só o exe: o resto da pasta é do seu tosu
 }
 LICENCAS = os.path.join(DIST, "licencas")
+
+
+def sons_padrao() -> list:
+    """Os arquivos do SONS padrão, lidos do leitor_chat.py."""
+    arvore = ast.parse(open(os.path.join(PASTA, "leitor_chat.py"), encoding="utf-8").read())
+    for no in arvore.body:
+        if isinstance(no, ast.Assign) and getattr(no.targets[0], "id", "") == "SONS":
+            return sorted(set(ast.literal_eval(no.value).values()))
+    return []
+
+
+for _arquivo in sons_padrao():
+    ARQUIVOS["sons/" + _arquivo] = os.path.join(PASTA, "sons", _arquivo)
 
 
 def main():

@@ -38,8 +38,9 @@ COMANDOS DO CHAT
                          !comandos todos = todos
   !mensagens             quantas mensagens a pessoa mandou nesta live (!msg)
   !top                   as 3 pessoas que mais mandaram mensagem
-  !copiar <texto>        copia o texto para o seu Ctrl+C
-  !np                    mapa do osu! que você está jogando (!mapa)
+  !sons                  fala a lista de sons
+  !ai                    toca o som ai (os sons ficam no config.json, em "sons")
+  !np                   mapa do osu! que você está jogando (!mapa)
   !pp                    quanto PP o mapa vale com os mods atuais
   !rank                  seu rank global, PP e precisão
   !recorde               o recorde de PP desta live (!rec)
@@ -50,25 +51,34 @@ COMANDOS DO CHAT
                          no link .../beatmapsets/123456#osu/1234567, o set é o 123456
                          e a dificuldade é o 1234567
   !pedidos               quantos pedidos tem na fila e a posição da pessoa
+  !cancelar              tira da fila o próprio pedido, para corrigir um pedido errado
 
   Você e os moderadores:
   !mudo                  para de ler o chat
   !voltar                volta a ler o chat
   !limpar                apaga as mensagens que esperavam para ser lidas
   !apelido <usuário> <apelido>   a voz passa a chamar a pessoa pelo apelido (!ap)
+  !copiar <texto>        copia o texto para o seu Ctrl+C
   !voz <nome>            troca a voz: francisca, thalita, antonio, raquel, duarte ou maria
+                         com sotaque de gringo: ava, emma, brian, william, vivienne,
+                         remy, seraphina, florian, giuseppe ou hyunsu
   !velocidade <-10 a 10> velocidade da voz (!vel)
   !volume <0 a 100>      volume da voz (!vol)
   !nomes                 liga/desliga o "Fulano disse:" antes das mensagens
   !bloquear <palavra>    não lê mais mensagens com essa palavra (!bl)
   !desbloquear <palavra> volta a ler mensagens com essa palavra (!dbl)
+  !silenciar <nome>      a voz para de ler a pessoa e ignora os comandos dela
+                         (o nome que aparece no chat ou o usuário)
+  !liberar <nome>        tira a pessoa dos silenciados
   !desligar <comando>    desliga um comando (o nome vai sem o !)
   !ligar <comando>       liga de novo um comando desligado
   !avisos mapa           liga/desliga o aviso de mapa novo (!avisos recorde: o de recorde)
   !espera <segundos>     tempo que cada pessoa espera entre um comando e outro
+  !esperasom <segundos>  tempo entre um som e outro, para o chat todo
   !tamanho <letras>      quantas letras de cada mensagem são lidas
   !fila <número>         quantas mensagens podem esperar a voz
   !proximo               manda o próximo pedido no seu chat do osu! ou abre no navegador (!prox)
+  !remover <posição>     tira da fila o pedido daquela posição, sem abrir o mapa
   !fecharpedidos         para de aceitar pedidos (!fechar)
   !abrirpedidos          volta a aceitar pedidos (!abrir)
   !zerarpedidos          apaga a fila de pedidos (!zerar)
@@ -80,7 +90,7 @@ COMANDOS DO CHAT
   !desmod <usuário>      tira alguém dos moderadores
 
   O que os comandos de você e dos mods mudam fica gravado, menos !mudo,
-  !voltar, !limpar e os de pedidos, que valem até fechar o programa.
+  !voltar, !limpar, !copiar e os de pedidos, que valem até fechar o programa.
 
 
 CONFIGURAÇÕES
@@ -98,7 +108,9 @@ CONFIGURAÇÕES
   tiktok_usuario         seu usuário do TikTok, sem @ (guardado na primeira vez que você digita)
   voz                    voz que fala: "pt-BR-FranciscaNeural", "pt-BR-ThalitaMultilingualNeural",
                          "pt-BR-AntonioNeural", "pt-PT-RaquelNeural", "pt-PT-DuarteNeural"
-                         ou "windows" (funciona sem internet)
+                         ou "windows" (funciona sem internet). Também há vozes de outros
+                         países com sotaque, como "en-US-AvaMultilingualNeural" e
+                         "it-IT-GiuseppeMultilingualNeural" (lista na página de configurações)
   velocidade             velocidade da voz, de -10 (lenta) a 10 (rápida)
   volume                 volume da voz, de 0 a 100
   ler_nome               true: fala "Fulano disse: ..." antes da mensagem; false: só a mensagem
@@ -106,9 +118,16 @@ CONFIGURAÇÕES
   fila_maxima            quantas mensagens esperam para ser lidas; com o chat rápido,
                          as mais antigas são descartadas
   palavras_bloqueadas    mensagens com estas palavras não são lidas. ex.: ["spam", "palavrão"]
+  usuarios_silenciados   usuários do TikTok (sem @) que a voz não lê e cujos comandos são ignorados
   prefixo                símbolo que começa os comandos do chat (o "!" de !pedir)
   moderadores            usuários do TikTok (sem @) que podem usar os comandos de moderação
   espera_comando         segundos que cada pessoa espera entre um comando e outro
+  espera_som             segundos entre um som e outro, para o chat todo
+  sons                   os comandos de som: o comando (sem !) e o arquivo da pasta sons.
+                         Já vem com !ai, !ban, !banido, !cano, !quecano, !zap e !fah.
+                         ex.: "sons": {"ai": "ai.mp3", "zap": "zap.mp3"}
+                         Mais fácil: na página de configurações, em Sons, escolha o arquivo
+                         e clique em Adicionar (ela copia o arquivo e grava aqui)
   pedidos_maximos        quantos pedidos de mapas cabem na fila
   fila_pedidos           true: os pedidos entram na fila; false: cada !pedir vai direto
                          para o seu chat do osu!
@@ -142,6 +161,7 @@ ARQUIVOS
                 as de mais de 7 dias são apagadas sozinhas ao abrir o programa:
                 copie para outra pasta a que quiser guardar
   apelidos.txt  apelidos que a voz usa
+  sons\         os arquivos dos sons (qual comando toca cada um fica no config.json)
   pedidos.txt   fila de pedidos de mapas. Para mostrar na live com fundo transparente
                 (só na primeira vez): no topo da página de configurações, clique em
                 "Copiar o link da fila"; no TikTok LIVE Studio, adicione uma fonte de
