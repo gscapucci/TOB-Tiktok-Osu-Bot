@@ -21,7 +21,7 @@ Comandos do chat (as respostas são faladas):
 Pedidos de mapas do osu! (a fila fica salva em pedidos.txt):
     Todo mundo:  !pedir <link, nome, código do set ou d + código da dificuldade>  !pedidos  !cancelar
     Você e MODERADORES:  !proximo (abre no navegador)  !remover <posição>  !fecharpedidos
-                         !abrirpedidos  !zerarpedidos  !limitepedidos <número>
+                         !abrirpedidos  !zerarpedidos  !limitepedidos <número>  !porpessoa <número>
                          !filapedidos (liga/desliga a fila: desligada, cada pedido vai direto para o osu!)
 
 osu! (o tosu abre sozinho, se estiver na pasta tosu):  !np (mapa atual)  !pp  !rank  !recorde
@@ -96,6 +96,7 @@ SONS = {"ai": "ai-ai-ai.mp3", "ban": "banido_FzWiL58.mp3", "banido": "banido_FzW
         "quecano": "metal-pipe-clang.mp3", "cano": "metal-pipe-clang.mp3", "zap": "som-do-zap-zap-estourado.mp3",
         "fah": "fahhhhhhhhhhhhhh.mp3"}
 PEDIDOS_MAXIMOS = 30    # tamanho máximo da fila de pedidos de mapas do osu!
+PEDIDOS_POR_PESSOA = 1  # quantos pedidos cada pessoa pode ter na fila ao mesmo tempo (0 = sem limite)
 FILA_PEDIDOS = True     # False: cada !pedir vai direto para o seu chat do osu!, sem fila e sem a voz anunciar
 COMANDOS_DESATIVADOS = []  # comandos desligados, sem o "!". ex.: ["copiar", "top"]
 
@@ -130,12 +131,12 @@ PASTA_SONS = os.path.join(PASTA, "sons")  # onde ficam os arquivos dos SONS (a p
 # nome no config.json -> variável aqui do programa
 OPCOES = {nome.lower(): nome for nome in (
     "TIKTOK_USUARIO", "VOZ", "VELOCIDADE", "VOLUME", "LER_NOME", "TAMANHO_MAXIMO", "FILA_MAXIMA", "PALAVRAS_BLOQUEADAS",
-    "USUARIOS_SILENCIADOS", "PREFIXO", "MODERADORES", "ESPERA_COMANDO", "ESPERA_SOM", "SONS", "PEDIDOS_MAXIMOS", "FILA_PEDIDOS", "COMANDOS_DESATIVADOS",
+    "USUARIOS_SILENCIADOS", "PREFIXO", "MODERADORES", "ESPERA_COMANDO", "ESPERA_SOM", "SONS", "PEDIDOS_MAXIMOS", "PEDIDOS_POR_PESSOA", "FILA_PEDIDOS", "COMANDOS_DESATIVADOS",
     "TOSU_URL", "AVISAR_MAPA", "AVISAR_RECORDE", "OSU_USUARIO", "OSU_IRC_SENHA", "WEB_PORTA", "WEB_REDE_LOCAL", "ABRIR_PAGINA")}
 OPCOES_ANTIGAS = ("janela_pedidos",)  # opções de versões anteriores: ignoradas sem aviso
 SECRETAS = ("osu_irc_senha",)  # a página nunca mostra: só diz se tem uma salva e deixa trocar
 LIMITES = {"VELOCIDADE": (-10, 10), "VOLUME": (0, 100), "TAMANHO_MAXIMO": (1, None), "FILA_MAXIMA": (1, None),
-           "ESPERA_COMANDO": (0, None), "ESPERA_SOM": (0, None), "PEDIDOS_MAXIMOS": (1, None), "WEB_PORTA": (0, 65535)}
+           "ESPERA_COMANDO": (0, None), "ESPERA_SOM": (0, None), "PEDIDOS_MAXIMOS": (1, None), "PEDIDOS_POR_PESSOA": (0, None), "WEB_PORTA": (0, 65535)}
 
 
 def config_atual() -> dict:
@@ -889,7 +890,7 @@ COMANDOS_PUBLICOS = ["np", "pp", "rank", "recorde", "pedir", "pedidos", "cancela
 # !copiar é só de mods: com ele, qualquer um trocaria o seu Ctrl+C por um texto malicioso sem você perceber
 COMANDOS_MOD = ["mudo", "voltar", "limpar", "apelido", "copiar", "velocidade", "volume", "voz", "nomes", "bloquear",
                 "desbloquear", "silenciar", "liberar", "ligar", "desligar", "avisos", "espera", "tamanho", "fila",
-                "esperasom", "proximo", "remover", "fecharpedidos", "abrirpedidos", "zerarpedidos", "limitepedidos", "filapedidos"]
+                "esperasom", "proximo", "remover", "fecharpedidos", "abrirpedidos", "zerarpedidos", "limitepedidos", "porpessoa", "filapedidos"]
 COMANDOS_DONO = ["mod", "desmod"]  # só você: se um mod pudesse criar mods, qualquer um daria acesso a qualquer um
 # atalhos: !vol 70 é o mesmo que !volume 70. Desligar um comando desliga os atalhos dele também.
 APELIDOS_COMANDO = {
@@ -940,6 +941,7 @@ DESCRICAO_COMANDO = {
     "abrirpedidos": "Volta a aceitar pedidos.",
     "zerarpedidos": "Apaga a fila de pedidos inteira.",
     "limitepedidos": "Muda o tamanho máximo da fila de pedidos.",
+    "porpessoa": "Muda quantos pedidos cada pessoa pode ter na fila ao mesmo tempo (0 = sem limite). Não vale para você e os mods.",
     "filapedidos": "Liga ou desliga a fila. Desligada, cada pedido vai direto para o seu chat do osu!; se não conseguir mandar, ele fica guardado na fila.",
     "mod": "Torna alguém moderador (usuário do TikTok, sem @).",
     "desmod": "Tira alguém dos moderadores.",
@@ -952,7 +954,7 @@ def desativado(cmd: str) -> bool:
 
 
 FALADO = {"proximo": "próximo", "fecharpedidos": "fechar pedidos", "abrirpedidos": "abrir pedidos",
-          "zerarpedidos": "zerar pedidos", "limitepedidos": "limite pedidos",
+          "zerarpedidos": "zerar pedidos", "limitepedidos": "limite pedidos", "porpessoa": "por pessoa",
           "filapedidos": "fila pedidos", "esperasom": "espera som"}  # como a voz fala cada comando
 
 # !voz francisca -> nome da voz no config
@@ -975,6 +977,7 @@ NUMERICOS = {
     "tamanho": ("tamanho_maximo", "Vou ler até {} letras de cada mensagem."),
     "fila": ("fila_maxima", "A fila de fala agora guarda até {} mensagens."),
     "limitepedidos": ("pedidos_maximos", "A fila de pedidos agora aceita até {}."),
+    "porpessoa": ("pedidos_por_pessoa", "Agora cada pessoa pode ter até {} pedidos na fila."),
 }
 
 
@@ -1180,7 +1183,11 @@ def tratar_comando(user, nome: str, texto: str, dono: str) -> bool:
                 falar(f"Use: exclamação {FALADO.get(cmd, cmd)} e um número.")
                 return True
             mudar_config({chave: n})  # fora do limite, usa o limite mais próximo
-            falar(resposta.format(globals()[OPCOES[chave]]))
+            valor = globals()[OPCOES[chave]]
+            if cmd == "porpessoa" and valor in (0, 1):
+                resposta = "Agora cada pessoa pode pedir quantos mapas quiser." if valor == 0 else \
+                    "Agora cada pessoa pode ter um pedido na fila."
+            falar(resposta.format(valor))
             return True
         if cmd == "voz":
             voz = VOZES.get(arg.lower()) or next((v for v in VOZES.values() if v.lower() == arg.lower()), None)
@@ -1287,7 +1294,9 @@ def tratar_comando(user, nome: str, texto: str, dono: str) -> bool:
         return True  # outro som tocou há pouco: ignora calado (e a pessoa não perde a vez dela)
     # cancelar o próprio pedido não espera nem conta como comando: quem errou o pedido corrige logo.
     # Não vira spam porque, para cancelar de novo, a pessoa precisa de outro !pedir, e esse espera.
-    pedido_meu = next((i for i, p in enumerate(pedidos) if p["uid"] == uid), None) if cmd == "cancelar" else None
+    # com mais de um pedido, o cancelar tira o mais recente
+    pedido_meu = next((i for i in reversed(range(len(pedidos))) if pedidos[i]["uid"] == uid), None) \
+        if cmd == "cancelar" else None
     if pedido_meu is None:
         if not eh_mod and agora - ultimo_comando.get(uid, 0) < ESPERA_COMANDO:
             return True  # anti-spam: ignora calado
@@ -1359,7 +1368,8 @@ def tratar_comando(user, nome: str, texto: str, dono: str) -> bool:
             falar(f"{p['name']} está em número {numero(p['globalRank'])} no mundo, "
                   f"com {numero(p['pp'])} PP e {numero(p['accuracy'], 2)} por cento de precisão.")
     elif cmd == "pedir":
-        meu = next((i for i, p in enumerate(pedidos, 1) if p["uid"] == uid), None)
+        meus = [i for i, p in enumerate(pedidos, 1) if p["uid"] == uid]  # posições dos pedidos da pessoa
+        no_limite = PEDIDOS_POR_PESSOA and not eh_mod and len(meus) >= PEDIDOS_POR_PESSOA
         if not pedidos_abertos:
             dizer(f"{nome}, os pedidos estão fechados agora.")
         elif not arg:
@@ -1371,8 +1381,10 @@ def tratar_comando(user, nome: str, texto: str, dono: str) -> bool:
             p = {"uid": uid, "nome": nome, "texto": arg, "url": link_do_pedido(arg)}
             print(f"[pedido de {nome}: {arg}]\n  {p['url']}")
             threading.Thread(target=abrir_pedido, args=(p, False), daemon=True).start()
-        elif meu:
-            dizer(f"{nome}, você já tem um pedido na fila, na posição {meu}.")
+        elif no_limite and len(meus) == 1:
+            dizer(f"{nome}, você já tem um pedido na fila, na posição {meus[0]}.")
+        elif no_limite:  # o limite pode ter baixado com a pessoa já tendo mais pedidos que ele
+            dizer(f"{nome}, você já tem {len(meus)} pedidos na fila, e o máximo por pessoa é {PEDIDOS_POR_PESSOA}.")
         elif len(pedidos) >= PEDIDOS_MAXIMOS:
             dizer(f"{nome}, a fila de pedidos está cheia.")
         elif tem_palavra_bloqueada(arg):
@@ -1398,12 +1410,14 @@ def tratar_comando(user, nome: str, texto: str, dono: str) -> bool:
               (f" Tem {n} {'guardado' if n == 1 else 'guardados'} na fila." if n else "") +
               ("" if pedidos_abertos else " Os pedidos estão fechados."))
     elif cmd == "pedidos":
-        meu = next((i for i, p in enumerate(pedidos, 1) if p["uid"] == uid), None)
+        meus = [str(i) for i, p in enumerate(pedidos, 1) if p["uid"] == uid]
         n = len(pedidos)
         texto = "Não tem pedidos na fila." if n == 0 else \
             f"Tem {n} {'pedido' if n == 1 else 'pedidos'} na fila."
-        if meu:
-            texto += f" O seu é o número {meu}."
+        if len(meus) == 1:
+            texto += f" O seu é o número {meus[0]}."
+        elif meus:
+            texto += f" Os seus são os números {', '.join(meus[:-1])} e {meus[-1]}."
         if not pedidos_abertos:
             texto += " Os pedidos estão fechados."
         falar(texto)
@@ -1585,6 +1599,7 @@ li { display: flex; gap: .45em; align-items: baseline; padding: 3px 0; }
 .mapa { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 22em; }
 .quem { font-size: .7em; color: #fff; font-weight: 600; white-space: nowrap; }
 .vazio, .mais { font-size: .75em; color: #fff; font-weight: 600; }
+ol:not(:empty) + #extra { margin-top: 6px; }  /* separa o "Peça com !pedir" da lista */
 </style>
 </head>
 <body>
@@ -1620,9 +1635,11 @@ async function atualizar() {
     li.append(el("span", "pos", (i + 1) + "."), el("span", "mapa", mapa), el("span", "quem", p.nome));
     return li;
   }));
-  $("extra").replaceChildren(
-    n > MAX ? el("div", "mais", `+ ${n - MAX} na fila`) :
-    n === 0 && d.fila && d.abertos ? el("div", "vazio", `Peça com ${d.prefixo}pedir <link, nome ou código>`) : "");
+  // como pedir fica sempre à vista enquanto os pedidos estão abertos, com ou sem gente na fila
+  $("extra").replaceChildren(...[
+    n > MAX ? el("div", "mais", `+ ${n - MAX} na fila`) : null,
+    d.abertos ? el("div", "vazio", `Peça com ${d.prefixo}pedir <link, nome ou código>`) : null,
+  ].filter(Boolean));
 }
 
 atualizar();
@@ -1823,6 +1840,8 @@ button.principal { background: var(--destaque); border-color: var(--destaque); c
     <h2>Pedidos de mapas</h2>
     <label for="pedidos_maximos">Tamanho máximo da fila de pedidos<small>Com a fila cheia, novos pedidos são recusados. No chat: !limitepedidos 20.</small></label>
     <input type="number" id="pedidos_maximos" min="1">
+    <label for="pedidos_por_pessoa">Pedidos por pessoa<small>Quantos pedidos cada pessoa pode ter na fila ao mesmo tempo. 0 = sem limite. Não vale para você e os mods. No chat: !porpessoa 2.</small></label>
+    <input type="number" id="pedidos_por_pessoa" min="0">
     <label class="check"><input type="checkbox" id="fila_pedidos"><span>Usar fila de pedidos<small>Desligado: cada pedido vai direto
       para o seu chat do osu! (precisa do nome e da senha de IRC) e a voz não anuncia. No chat: !filapedidos.</small></span></label>
   </section>

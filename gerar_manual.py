@@ -345,6 +345,7 @@ s.append(tabela(["Comando", "O que faz"], [
     [cmd("!tamanho 150"), "Quantas letras de cada mensagem são lidas."],
     [cmd("!fila 10"), "Quantas mensagens podem ficar esperando a voz."],
     [cmd("!limitepedidos 20"), "Quantos pedidos cabem na fila."],
+    [cmd("!porpessoa 2"), "Quantos pedidos cada pessoa pode ter na fila (0 = sem limite)."],
     [cmd("!filapedidos"), "Liga ou desliga a fila de pedidos. Desligada, cada pedido vai direto para o "
                           "seu chat do osu!, sem a voz anunciar (seção 6)."],
 ], [42, 128]))
@@ -429,7 +430,9 @@ s.append(dica("Se a senha estiver errada ou o osu! não responder, a janela do p
               "pedido abre no navegador, como antes."))
 s.append(p("Regras da fila", h2))
 s += itens([
-    f"Cada pessoa pode ter <b>um pedido por vez</b> na fila. Errou? {cmd('!cancelar')} tira o pedido, e dá para "
+    f"Cada pessoa pode ter <b>um pedido por vez</b> na fila. Para deixar mais, use {cmd('!porpessoa 3')} "
+    "(0 = sem limite). Você e os moderadores não têm esse limite.",
+    f"Errou? {cmd('!cancelar')} tira o pedido (com mais de um, o mais recente), e dá para "
     f"pedir de novo. Você e os moderadores tiram qualquer um com {cmd('!remover 3')} (a posição na fila).",
     f"A fila aceita até <b>30 pedidos</b>. Você ou um moderador pode mudar com {cmd('!limitepedidos 20')}.",
     "A fila aparece no arquivo <b>pedidos.txt</b>, atualizado na hora. Dá para deixar aberto durante a live.",
@@ -541,6 +544,7 @@ s.append(tabela(["Função", "Durante a live", "No config.json"], [
     ["Tamanho das mensagens", cmd("!tamanho 200"), '"tamanho_maximo": 200'],
     ["Fila de fala", cmd("!fila 15"), '"fila_maxima": 15'],
     ["Tamanho da fila de pedidos", cmd("!limitepedidos 30"), '"pedidos_maximos": 30'],
+    ["Pedidos por pessoa", cmd("!porpessoa 1"), '"pedidos_por_pessoa": 1'],
     ["Voz", cmd("!voz francisca"), '"voz": "pt-BR-FranciscaNeural"'],
     ["Página no celular", "—", '"web_rede_local": true / false'],
 ], [45, 50, 75]))
@@ -671,6 +675,8 @@ s.append(Spacer(1, 8))
 s.append(p("<b>Pedidos de mapas e osu!</b>", rotulo))
 s.append(opcoes([
     ("pedidos_maximos", "Quantos pedidos cabem na fila. Quando enche, o !pedir responde que a fila está cheia."),
+    ("pedidos_por_pessoa", "Quantos pedidos cada pessoa pode ter na fila ao mesmo tempo. <b>0</b> = sem limite. "
+                           "Não vale para você e os moderadores."),
     ("fila_pedidos", "<b>true</b>: os pedidos entram na fila e você abre com o !proximo. <b>false</b>: cada "
                      "pedido vai direto para o seu chat do osu!, sem a voz anunciar."),
     ("avisar_mapa", "<b>true</b>: a voz anuncia quando você começa a jogar um mapa novo."),

@@ -83,6 +83,7 @@ COMANDOS DO CHAT
   !abrirpedidos          volta a aceitar pedidos (!abrir)
   !zerarpedidos          apaga a fila de pedidos (!zerar)
   !limitepedidos <número>   quantos pedidos cabem na fila (!limite)
+  !porpessoa <número>    quantos pedidos cada pessoa pode ter na fila (0 = sem limite)
   !filapedidos           liga/desliga a fila: desligada, cada pedido vai direto para o osu!
 
   Só você:
@@ -129,6 +130,8 @@ CONFIGURAÇÕES
                          Mais fácil: na página de configurações, em Sons, escolha o arquivo
                          e clique em Adicionar (ela copia o arquivo e grava aqui)
   pedidos_maximos        quantos pedidos de mapas cabem na fila
+  pedidos_por_pessoa     quantos pedidos cada pessoa pode ter na fila (0 = sem limite;
+                         não vale para você e os mods)
   fila_pedidos           true: os pedidos entram na fila; false: cada !pedir vai direto
                          para o seu chat do osu!
   comandos_desativados   comandos desligados, sem o !. ex.: ["copiar", "top"]

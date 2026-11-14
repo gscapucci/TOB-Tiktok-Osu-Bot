@@ -324,6 +324,7 @@ live e valem até fechar o programa.
 | `!fecharpedidos` / `!abrirpedidos` | Para / volta a aceitar pedidos | — |
 | `!zerarpedidos` | Apaga a fila de pedidos | — |
 | `!limitepedidos 20` | Tamanho máximo da fila de pedidos (também aceita `!limite pedidos 20`) | `pedidos_maximos` |
+| `!porpessoa 2` | Quantos pedidos cada pessoa pode ter na fila (`0` = sem limite) | `pedidos_por_pessoa` |
 
 **Só você** (o dono da live):
 
@@ -382,6 +383,7 @@ O chat pede mapas, eles entram numa fila e você abre um de cada vez.
 | `!fecharpedidos` / `!abrirpedidos` | Você/mods | Para / volta a aceitar pedidos (também aceita `!fechar pedidos`) |
 | `!zerarpedidos` | Você/mods | Apaga a fila inteira |
 | `!limitepedidos 20` | Você/mods | Muda o tamanho máximo da fila (fica gravado) |
+| `!porpessoa 2` | Você/mods | Muda quantos pedidos cada pessoa pode ter na fila; `0` = sem limite (fica gravado) |
 | `!filapedidos` | Você/mods | Liga/desliga a fila. Desligada, cada pedido vai direto para o seu chat do osu!, sem a voz anunciar (fica gravado) |
 
 - **No chat do osu!:** com o seu nome e a senha de IRC preenchidos (na seção osu! da página de configurações, ou
@@ -394,7 +396,8 @@ O chat pede mapas, eles entram numa fila e você abre um de cada vez.
   cair, entra de novo sozinho no próximo pedido.
 - Sem isso, pedido com **link** abre a página do mapa no navegador; pedido com **nome** abre a busca do site do osu!.
 - No **lazer**: baixe o mapa no site (logado) e dê dois cliques no `.osz`.
-- Cada pessoa pode ter **um pedido por vez** na fila.
+- Cada pessoa pode ter **um pedido por vez** na fila (muda com `!porpessoa 3`, ou `pedidos_por_pessoa`;
+  `0` = sem limite). Você e os mods não têm esse limite. Com mais de um, o `!cancelar` tira o mais recente.
 - A fila fica visível no arquivo **`pedidos.txt`**, atualizado na hora.
 - **Fila na tela da live (fundo transparente):** **só na primeira vez**, no topo da página de
   configurações, clique em **Copiar o link da fila**; no **TikTok LIVE Studio**, adicione
@@ -414,6 +417,7 @@ O chat pede mapas, eles entram numa fila e você abre um de cada vez.
 | Configuração | O que faz | Padrão |
 |---|---|---|
 | `pedidos_maximos` | Tamanho máximo da fila | `30` |
+| `pedidos_por_pessoa` | Quantos pedidos cada pessoa pode ter na fila ao mesmo tempo (`0` = sem limite) | `1` |
 | `fila_pedidos` | `false`: pedidos vão direto para o chat do osu!, sem fila e sem a voz anunciar | `true` |
 | Desligar tudo | `"comandos_desativados": ["pedir", "pedidos", "cancelar", "proximo", "remover", "fecharpedidos", "abrirpedidos", "zerarpedidos"]` | — |
 
@@ -500,6 +504,7 @@ configurações. Os comandos de chat que mudam uma configuração gravam no
 | Tamanho das mensagens lidas | `!tamanho N` | `"tamanho_maximo": N` |
 | Fila de fala | `!fila N` | `"fila_maxima": N` |
 | Tamanho da fila de pedidos | `!limitepedidos N` | `"pedidos_maximos": N` |
+| Pedidos por pessoa | `!porpessoa N` | `"pedidos_por_pessoa": N` |
 | Prefixo, tosu, página | — | `"prefixo"`, `"tosu_url"`, `"web_porta"`, `"web_rede_local"`, `"abrir_pagina"` |
 
 ---
