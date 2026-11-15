@@ -91,16 +91,17 @@ PREFIXO = "!"
 MODERADORES = []        # usuários (sem @) que podem usar os comandos de moderação, além de você
 ESPERA_COMANDO = 15     # segundos que cada pessoa espera entre um comando e outro
 ESPERA_SOM = 10         # depois de um som (!ai), segundos até o chat poder tocar outro
-# comandos de som: "comando": {"arquivo": "arquivo da pasta sons" (aceita caminho completo), "volume": 0 a 100}.
-# O volume do som é uma parte do volume geral (100 = igual à voz). No config.json também vale só "comando": "arquivo".
+# comandos de som: "comando": {"arquivo": "arquivo da pasta sons" (aceita caminho completo), "volume": 0 a 100,
+# "ligado": true ou false}. O volume do som é uma parte do volume geral (100 = igual à voz).
+# No config.json também vale só "comando": "arquivo" (volume 100, ligado).
 # Os arquivos destes vêm no zip.
-SONS = {"ai": {"arquivo": "ai-ai-ai.mp3", "volume": 100},
-        "ban": {"arquivo": "banido_FzWiL58.mp3", "volume": 100},
-        "banido": {"arquivo": "banido_FzWiL58.mp3", "volume": 100},
-        "quecano": {"arquivo": "metal-pipe-clang.mp3", "volume": 100},
-        "cano": {"arquivo": "metal-pipe-clang.mp3", "volume": 100},
-        "zap": {"arquivo": "som-do-zap-zap-estourado.mp3", "volume": 100},
-        "fah": {"arquivo": "fahhhhhhhhhhhhhh.mp3", "volume": 100}}
+SONS = {"ai": {"arquivo": "ai-ai-ai.mp3", "volume": 100, "ligado": True},
+        "ban": {"arquivo": "banido_FzWiL58.mp3", "volume": 100, "ligado": True},
+        "banido": {"arquivo": "banido_FzWiL58.mp3", "volume": 100, "ligado": True},
+        "quecano": {"arquivo": "metal-pipe-clang.mp3", "volume": 100, "ligado": True},
+        "cano": {"arquivo": "metal-pipe-clang.mp3", "volume": 100, "ligado": True},
+        "zap": {"arquivo": "som-do-zap-zap-estourado.mp3", "volume": 100, "ligado": True},
+        "fah": {"arquivo": "fahhhhhhhhhhhhhh.mp3", "volume": 100, "ligado": True}}
 PEDIDOS_MAXIMOS = 30    # tamanho máximo da fila de pedidos de mapas do osu!
 PEDIDOS_POR_PESSOA = 1  # quantos pedidos cada pessoa pode ter na fila ao mesmo tempo (0 = sem limite)
 FILA_PEDIDOS = True     # False: cada !pedir vai direto para o seu chat do osu!, sem fila e sem a voz anunciar
@@ -161,6 +162,7 @@ def mudar_config(mudancas: dict) -> list:
     """Aplica as mudanças (do chat ou da página) e grava no config.json. Devolve os avisos."""
     with trava_config:
         avisos = aplicar_config(mudancas)
+        mover_sons_desligados()
         try:
             salvar_config()
         except OSError as e:
@@ -233,6 +235,7 @@ def carregar_config():
         print("*** Usando as configurações padrão. Corrija o arquivo e abra o programa de novo.\n")
         return
     avisos = aplicar_config(config)
+    sons_movidos = mover_sons_desligados()
     for aviso in avisos:
         print(f"*** config.json: {aviso}")
     for aviso in sons_configurados()[1]:
@@ -241,15 +244,20 @@ def carregar_config():
     # Com algum aviso não grava, para não apagar o que a pessoa ainda precisa corrigir.
     novas = [chave for chave in OPCOES if chave not in {c.lower() for c in config}]
     # sons no jeito antigo ("ai": "ai.mp3") são regravados com o volume, para a pessoa ver onde mudar
-    sons_antigos = any(isinstance(v, str) for c, sons in config.items() if c.lower() == "sons"
-                       and isinstance(sons, dict) for v in sons.values())
-    if (novas or sons_antigos) and not avisos:
+    sons_antigos = any(not isinstance(v, dict) or "volume" not in v or "ligado" not in v
+                       for c, sons in config.items() if c.lower() == "sons" and isinstance(sons, dict)
+                       for v in sons.values())
+    if (novas or sons_antigos or sons_movidos) and not avisos:
         try:
             salvar_config()
             if novas:
                 print(f"Opções novas no config.json (com o valor padrão): {', '.join(novas)}\n")
             if sons_antigos:
-                print("Os sons do config.json agora têm \"volume\" (de 0 a 100) ao lado do arquivo.\n")
+                print("Os sons do config.json agora têm \"volume\" (de 0 a 100) e \"ligado\" (true ou false) "
+                      "ao lado do arquivo.\n")
+            if sons_movidos:
+                print(f"Estes sons saíram de comandos_desativados e ficaram com \"ligado\": false: "
+                      f"{', '.join(sons_movidos)}\n")
         except OSError:
             pass
 
@@ -963,7 +971,22 @@ PROTEGIDOS = ("ligar", "desligar")  # se desligar estes pelo chat, não daria pa
 
 
 def desativado(cmd: str) -> bool:
+    """Comando desligado em COMANDOS_DESATIVADOS, ou som com "ligado": false em SONS."""
+    if cmd in SONS:
+        return not SONS[cmd]["ligado"]
     return APELIDOS_COMANDO.get(cmd, cmd) in [c.lstrip(PREFIXO).lower() for c in COMANDOS_DESATIVADOS]
+
+
+def mover_sons_desligados() -> list:
+    """Sons que estão em COMANDOS_DESATIVADOS (de versões anteriores, ou escritos lá à mão) passam a
+    ficar desligados no próprio som, que é onde a página e o !ligar mexem. Devolve os que mudaram."""
+    global COMANDOS_DESATIVADOS, SONS
+    movidos = [c for c in COMANDOS_DESATIVADOS if nome_de_som(c.lstrip(PREFIXO)) in SONS]
+    if movidos:
+        nomes = {nome_de_som(c.lstrip(PREFIXO)) for c in movidos}
+        SONS = {n: {**som, "ligado": som["ligado"] and n not in nomes} for n, som in SONS.items()}
+        COMANDOS_DESATIVADOS = [c for c in COMANDOS_DESATIVADOS if c not in movidos]
+    return movidos
 
 
 FALADO = {"proximo": "próximo", "fecharpedidos": "fechar pedidos", "abrirpedidos": "abrir pedidos",
@@ -1012,13 +1035,17 @@ def nome_reservado(nome: str) -> bool:
 
 def conferir_sons(sons: dict) -> tuple:
     """Arruma os nomes dos comandos de som ("!Ai" -> "ai") e tira os que não dão. Cada som pode vir como
-    "arquivo" ou {"arquivo": "...", "volume": 0 a 100}. Devolve (sons arrumados no segundo jeito, avisos)."""
+    "arquivo" ou {"arquivo": "...", "volume": 0 a 100, "ligado": true/false}.
+    Devolve (sons arrumados no segundo jeito, avisos)."""
     limpos, avisos = {}, []
     for comando, valor in sons.items():
         nome = nome_de_som(comando.lstrip(PREFIXO))
-        arquivo, volume = valor, 100
+        arquivo, volume, ligado = valor, 100, True
         if isinstance(valor, dict):
-            arquivo, volume = valor.get("arquivo", ""), valor.get("volume", 100)
+            arquivo, volume, ligado = valor.get("arquivo", ""), valor.get("volume", 100), valor.get("ligado", True)
+            if not isinstance(ligado, bool):
+                avisos.append(f"o \"ligado\" do som \"{comando}\" deveria ser true ou false. Deixei ligado.")
+                ligado = True
             if not isinstance(volume, (int, float)) or isinstance(volume, bool):
                 avisos.append(f"o volume do som \"{comando}\" deveria ser um número de 0 a 100. Usei 100.")
                 volume = 100
@@ -1027,7 +1054,7 @@ def conferir_sons(sons: dict) -> tuple:
             volume = max(0, min(100, round(volume)))
         if not isinstance(arquivo, str):
             avisos.append(f"o som \"{comando}\" deveria ser \"arquivo\" ou "
-                          f"{{\"arquivo\": \"...\", \"volume\": 100}}. Ignorei.")
+                          f"{{\"arquivo\": \"...\", \"volume\": 100, \"ligado\": true}}. Ignorei.")
         elif not nome or not arquivo.strip():
             avisos.append(f"o som \"{comando}\" precisa de um nome (letras ou números) e de um arquivo. Ignorei.")
         elif nome_reservado(nome):
@@ -1035,7 +1062,7 @@ def conferir_sons(sons: dict) -> tuple:
         elif nome in limpos:
             avisos.append(f"o som \"{comando}\" aparece duas vezes. Usei o primeiro.")
         else:
-            limpos[nome] = {"arquivo": arquivo.strip(), "volume": volume}
+            limpos[nome] = {"arquivo": arquivo.strip(), "volume": volume, "ligado": ligado}
     return limpos, avisos
 
 
@@ -1247,8 +1274,12 @@ def tratar_comando(user, nome: str, texto: str, dono: str) -> bool:
         if cmd in ("ligar", "desligar"):
             alvo = arg.lstrip(PREFIXO).lower()
             alvo = APELIDOS_COMANDO.get(alvo, alvo)
-            if alvo not in TODOS_COMANDOS and alvo not in sons_disponiveis():
+            if alvo not in TODOS_COMANDOS and alvo not in SONS:
                 falar(f"Use: exclamação {cmd} e o nome de um comando, sem a exclamação.")
+                return True
+            if alvo in SONS:
+                mudar_config({"sons": {**SONS, alvo: {**SONS[alvo], "ligado": cmd == "ligar"}}})
+                falar(f"Som {alvo} {'ligado' if cmd == 'ligar' else 'desligado'}.")
                 return True
             if alvo in PROTEGIDOS:
                 falar(f"O {alvo} não pode ser desligado pelo chat.")
@@ -1491,19 +1522,17 @@ class PaginaConfig(http.server.BaseHTTPRequestHandler):
         grupos = [grupo("Todo mundo", ["comandos"] + COMANDOS_PUBLICOS),
                   grupo("Você e os moderadores", COMANDOS_MOD),
                   grupo("Só você", COMANDOS_DONO)]
-        if sons:
-            grupos.append({"titulo": "Sons (todo mundo)", "comandos": [
-                {"cmd": n, "descricao": f"Toca {SONS[n]['arquivo']}.", "atalhos": []} for n in sons]})
         return {"config": config, "comandos": TODOS_COMANDOS, "apelidos": APELIDOS_COMANDO, "grupos": grupos,
-                "sons": [{"nome": n, "arquivo": s["arquivo"], "volume": s["volume"], "existe": n in sons}
+                "sons": [{"nome": n, "arquivo": s["arquivo"], "volume": s["volume"], "ligado": s["ligado"],
+                          "existe": n in sons}
                          for n, s in SONS.items()],
                 "sons_faltando": faltando, "senha_salva": bool(OSU_IRC_SENHA.strip())}
 
     def mexer_nos_sons(self, d: dict):
-        """Página: tocar, apagar, adicionar ou mudar o volume de um som. Devolve (resposta, código)."""
+        """Página: tocar, apagar, adicionar, ligar/desligar ou mudar o volume de um som. Devolve (resposta, código)."""
         acao = d.get("acao")
         nome = nome_de_som(str(d.get("nome", "")))
-        if acao in ("tocar", "apagar", "volume") and nome not in SONS:
+        if acao in ("tocar", "apagar", "volume", "ligar") and nome not in SONS:
             return {"erro": "Não achei esse som. Clique em Recarregar."}, 404
         if acao == "tocar":
             som = sons_disponiveis().get(nome)
@@ -1518,6 +1547,14 @@ class PaginaConfig(http.server.BaseHTTPRequestHandler):
             mudar_config({"sons": {**SONS, nome: {**SONS[nome], "volume": volume}}})
             print(f"[volume do som {PREFIXO}{nome}: {volume}, pela página]")
             return {"mensagem": f"Volume do {PREFIXO}{nome}: {volume}.", **self.dados_da_pagina()}, 200
+        if acao == "ligar":
+            ligado = d.get("ligado")
+            if not isinstance(ligado, bool):
+                return {"erro": "dados inválidos"}, 400
+            mudar_config({"sons": {**SONS, nome: {**SONS[nome], "ligado": ligado}}})
+            print(f"[som {PREFIXO}{nome} {'ligado' if ligado else 'desligado'} pela página]")
+            return {"mensagem": f"Som {PREFIXO}{nome} {'ligado' if ligado else 'desligado'}.",
+                    **self.dados_da_pagina()}, 200
         if acao == "apagar":
             arquivo = SONS[nome]["arquivo"]
             mudar_config({"sons": {n: s for n, s in SONS.items() if n != nome}})
@@ -1564,7 +1601,7 @@ class PaginaConfig(http.server.BaseHTTPRequestHandler):
                 saida.write(conteudo)
         except OSError as e:
             return {"erro": f"Não consegui gravar o arquivo ({e})."}, 500
-        mudar_config({"sons": {**SONS, nome: {"arquivo": arquivo, "volume": 100}}})
+        mudar_config({"sons": {**SONS, nome: {"arquivo": arquivo, "volume": 100, "ligado": True}}})
         print(f"[som {PREFIXO}{nome} criado pela página]")
         return {"mensagem": f"Pronto: {PREFIXO}{nome} já funciona no chat.", **self.dados_da_pagina()}, 200
 
@@ -1760,6 +1797,8 @@ label.check input { margin-top: 4px; }
 .cmds .atalhos { color: var(--suave); font-size: 13px; }
 .som { display: flex; gap: 8px; align-items: center; padding: 6px 0; border-top: 1px solid var(--borda); }
 .som span { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.som > input[type=checkbox] { flex: none; width: auto; margin: 0; }
+.som.desligado span, .som.desligado .vol { opacity: .5; }
 .som button { padding: 5px 12px; }
 .som .vol { display: flex; gap: 6px; align-items: center; flex: 0 1 170px; min-width: 110px; margin: 0; font-weight: 400; }
 .som .vol input { flex: 1; min-width: 0; }
@@ -1852,15 +1891,16 @@ button.principal { background: var(--destaque); border-color: var(--destaque); c
     <label for="espera_comando">Espera entre comandos (segundos)<small>Anti-spam: quanto cada pessoa espera entre um comando e outro. Comandos a mais são ignorados. Não vale para você e os mods. No chat: !espera 10.</small></label>
     <input type="number" id="espera_comando" min="0">
     <label>Comandos ligados<small>Desmarque para desligar um comando (e os atalhos dele). Desligado, ele é
-      ignorado em silêncio e sai do !comandos.</small></label>
+      ignorado em silêncio e sai do !comandos. Os sons ligam e desligam logo abaixo, em Sons.</small></label>
     <div class="cmds" id="cmds"></div>
   </section>
 
   <section>
     <h2>Sons</h2>
     <p class="sub" style="margin:4px 0 0">Cada som vira um comando que todo mundo pode usar: o som <b>ai</b> toca com
-      <code>!ai</code>. O <code>!sons</code> fala a lista. No mudo, os sons não tocam. A barrinha de cada som é o volume dele
-      (100 = igual ao volume da voz): muda na hora e fica no config.json.</p>
+      <code>!ai</code>. O <code>!sons</code> fala a lista. No mudo, os sons não tocam. A caixinha liga e desliga o som
+      (no chat: !desligar ai), e a barrinha é o volume dele (100 = igual ao volume da voz). Os dois mudam na hora e ficam
+      no config.json.</p>
     <div id="lista_sons"></div>
     <small id="sons_faltando" style="color:var(--erro)"></small>
     <label for="som_nome">Novo som<small>O nome do comando (só letras e números) e um arquivo .mp3 ou .wav de até 5 MB.
@@ -1936,9 +1976,16 @@ function el(tag, classe, texto) {
 function mostrarSons(d) {
   const p = d.config.prefixo;
   $("lista_sons").replaceChildren(...(d.sons.length ? d.sons.map(s => {
-    const linha = el("div", "som"), texto = el("span"), tocar = el("button", "", "Tocar"), apagar = el("button", "", "Apagar");
+    const linha = el("div", s.ligado ? "som" : "som desligado"), texto = el("span"), tocar = el("button", "", "Tocar"),
+          apagar = el("button", "", "Apagar"), ligado = el("input");
+    ligado.type = "checkbox"; ligado.checked = s.ligado;
+    ligado.title = "Ligado"; ligado.setAttribute("aria-label", "Ligar o " + p + s.nome);
+    ligado.onchange = async () => {
+      if (!await sons({acao: "ligar", nome: s.nome, ligado: ligado.checked})) ligado.checked = !ligado.checked;
+    };
     tocar.type = apagar.type = "button";
-    texto.append(el("code", "", p + s.nome), el("small", "", s.arquivo + (s.existe ? "" : " (arquivo não encontrado)")));
+    texto.append(el("code", "", p + s.nome), el("small", "", s.arquivo + (s.ligado ? "" : " (desligado)") +
+      (s.existe ? "" : " (arquivo não encontrado)")));
     const vol = el("label", "vol"), barra = el("input"), valor = el("output", "", String(s.volume));
     barra.type = "range"; barra.min = 0; barra.max = 100; barra.value = s.volume;
     barra.setAttribute("aria-label", "Volume do " + p + s.nome);
@@ -1947,14 +1994,14 @@ function mostrarSons(d) {
     vol.append(barra, valor);
     tocar.onclick = () => sons({acao: "tocar", nome: s.nome});
     apagar.onclick = () => confirm("Apagar o som " + p + s.nome + "?") && sons({acao: "apagar", nome: s.nome});
-    linha.append(texto, vol, tocar, apagar);
+    linha.append(ligado, texto, vol, tocar, apagar);
     return linha;
   }) : [el("small", "", "Nenhum som ainda.")]));
   $("sons_faltando").textContent = d.sons_faltando.length ? "Estes não tocam, porque o arquivo não está na pasta sons: " +
     d.sons_faltando.join("; ") + "." : "";
 }
 
-// tocar, apagar, adicionar ou mudar o volume de um som. Devolve true se deu certo.
+// tocar, apagar, adicionar, ligar/desligar ou mudar o volume de um som. Devolve true se deu certo.
 async function sons(pedido) {
   try {
     const r = await fetch("/api/sons", {method: "POST", headers: {"Content-Type": "application/json"},

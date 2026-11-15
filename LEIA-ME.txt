@@ -124,14 +124,15 @@ CONFIGURAÇÕES
   moderadores            usuários do TikTok (sem @) que podem usar os comandos de moderação
   espera_comando         segundos que cada pessoa espera entre um comando e outro
   espera_som             segundos entre um som e outro, para o chat todo
-  sons                   os comandos de som: o comando (sem !), o arquivo da pasta sons e o
-                         volume do som (0 a 100, uma parte do volume geral; 100 = igual à voz).
+  sons                   os comandos de som: o comando (sem !), o arquivo da pasta sons, o
+                         volume do som (0 a 100, uma parte do volume geral; 100 = igual à voz)
+                         e se ele está ligado (true ou false; no chat: !desligar zap).
                          Já vem com !ai, !ban, !banido, !cano, !quecano, !zap e !fah.
-                         ex.: "sons": {"ai": {"arquivo": "ai.mp3", "volume": 100},
-                                       "zap": {"arquivo": "zap.mp3", "volume": 40}}
+                         ex.: "sons": {"ai": {"arquivo": "ai.mp3", "volume": 100, "ligado": true},
+                                       "zap": {"arquivo": "zap.mp3", "volume": 40, "ligado": false}}
                          Mais fácil: na página de configurações, em Sons, escolha o arquivo
                          e clique em Adicionar (ela copia o arquivo e grava aqui).
-                         Lá cada som também tem uma barrinha de volume.
+                         Lá cada som também tem a caixinha de ligado e a barrinha de volume.
   pedidos_maximos        quantos pedidos de mapas cabem na fila
   pedidos_por_pessoa     quantos pedidos cada pessoa pode ter na fila (0 = sem limite;
                          não vale para você e os mods)

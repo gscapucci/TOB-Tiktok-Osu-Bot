@@ -235,20 +235,25 @@ Você cria comandos que tocam um áudio: o som **ai** toca quando alguém escrev
 Todo mundo pode usar, e o som entra na fila da voz, então nunca toca por cima de uma fala.
 
 Os sons ficam no `config.json`, na opção `sons`: cada item é o comando (sem o `!`), o arquivo
-que ele toca e o volume dele, de `0` a `100`. Os arquivos ficam na pasta `sons`, ao lado do programa.
+que ele toca, o volume dele, de `0` a `100`, e se ele está ligado (`true` ou `false`). Os arquivos
+ficam na pasta `sons`, ao lado do programa.
 
 ```json
 "sons": {
-  "ai": {"arquivo": "ai.mp3", "volume": 100},
-  "banido": {"arquivo": "banido_FzWiL58.mp3", "volume": 60},
-  "zap": {"arquivo": "som-do-zap-zap-estourado.mp3", "volume": 40}
+  "ai": {"arquivo": "ai.mp3", "volume": 100, "ligado": true},
+  "banido": {"arquivo": "banido_FzWiL58.mp3", "volume": 60, "ligado": true},
+  "zap": {"arquivo": "som-do-zap-zap-estourado.mp3", "volume": 40, "ligado": false}
 }
 ```
+
+Um som desligado continua na lista, com o arquivo e o volume, mas o chat não toca e ele sai do
+`!sons`. Para ligar e desligar: a caixinha ao lado do som na página, `!ligar zap` / `!desligar zap`
+no chat, ou o `"ligado"` no `config.json`.
 
 O volume do som é uma parte do volume geral (`volume` / `!volume`): com `100` o som sai na mesma
 altura da voz, com `50` na metade. Na página, cada som tem uma barrinha de volume, que vale na hora
 e já grava no `config.json`. O jeito antigo, só `"ai": "ai.mp3"`, ainda funciona (vale como volume
-`100`), e o programa regrava no jeito novo ao abrir.
+`100` e ligado), e o programa regrava no jeito novo ao abrir.
 
 Para criar um som, tem dois jeitos:
 
@@ -270,7 +275,8 @@ O programa já vem com 7 sons, e os arquivos deles vêm na pasta `sons` do zip:
 | `!zap` | `som-do-zap-zap-estourado.mp3` |
 | `!fah` | `fahhhhhhhhhhhhhh.mp3` |
 
-Para tirar um, apague na página (ou a linha no `config.json`); para só desligar, use `!desligar zap`.
+Para tirar um, apague na página (ou a linha no `config.json`); para só desligar, desmarque a caixinha
+dele na página ou use `!desligar zap`.
 
 O nome do comando fica só com letras, números e `_` (maiúsculas, espaços e o `!` são tirados). Um
 som com o nome de um comando do programa (como `pedir`) é ignorado, e um som cujo arquivo não está
@@ -279,11 +285,11 @@ na pasta não toca: o programa avisa na janela ao abrir, e a página mostra em v
 Para o chat não virar uma mesa de som, depois de um som os outros esperam **10 segundos**
 (`espera_som`, ou `!esperasom 5` no chat). Os que chegarem antes são ignorados em silêncio.
 A espera entre comandos de cada pessoa também vale. Você e os mods não esperam. No `!mudo`, os
-sons não tocam. Para desligar um som: `!desligar ai`, ou desmarque em **Comandos ligados** na página.
+sons não tocam. Para desligar um som: `!desligar ai`, ou desmarque a caixinha dele na parte **Sons** da página.
 
 | Configuração | O que faz | Padrão |
 |---|---|---|
-| `sons` | Os comandos de som: `{"comando": {"arquivo": "ai.mp3", "volume": 100}}` | os 7 sons padrão (abaixo) |
+| `sons` | Os comandos de som: `{"comando": {"arquivo": "ai.mp3", "volume": 100, "ligado": true}}` | os 7 sons padrão (abaixo) |
 | `espera_som` | Segundos entre um som e outro, para o chat todo | `10` |
 
 ---
@@ -505,7 +511,7 @@ configurações. Os comandos de chat que mudam uma configuração gravam no
 | Quem é moderador | `!mod` / `!desmod usuario` (só você) | `"moderadores": ["usuario"]` |
 | Tempo anti-spam | `!espera N` | `"espera_comando": N` |
 | Tempo entre sons | `!esperasom N` | `"espera_som": N` |
-| Comandos de som e o volume de cada um | página, parte **Sons** | `"sons": {"ai": {"arquivo": "ai.mp3", "volume": 100}}` |
+| Comandos de som, o volume e o ligado de cada um | página, parte **Sons** | `"sons": {"ai": {"arquivo": "ai.mp3", "volume": 100, "ligado": true}}` |
 | Tamanho das mensagens lidas | `!tamanho N` | `"tamanho_maximo": N` |
 | Fila de fala | `!fila N` | `"fila_maxima": N` |
 | Tamanho da fila de pedidos | `!limitepedidos N` | `"pedidos_maximos": N` |

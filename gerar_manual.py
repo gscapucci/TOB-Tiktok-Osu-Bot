@@ -284,21 +284,23 @@ s.append(atencao("Cada pessoa só pode usar <b>um comando a cada 15 segundos</b>
 s.append(p("Sons", h2))
 s.append(p(f"Você cria comandos que tocam um áudio: o som <b>ai</b> toca quando alguém escreve {cmd('!ai')}. "
            "O som entra na fila da voz, então nunca toca por cima de uma fala. Os sons ficam no config.json, "
-           "em <b>sons</b> (o comando e o arquivo), e os arquivos na pasta <b>sons</b>. Tem dois jeitos de criar:"))
+           "em <b>sons</b> (o comando, o arquivo, o volume e se está ligado), e os arquivos na pasta <b>sons</b>. "
+           "Tem dois jeitos de criar:"))
 s.append(passos([
     ("Pela página de configurações", "Na parte <b>Sons</b>, escreva o nome do comando, escolha o arquivo "
                                      "(.mp3 ou .wav, até 5 MB) e clique em <b>Adicionar</b>. A página copia o arquivo "
-                                     "e grava o som no config.json. Vale na hora. Ali também dá para tocar, apagar "
-                                     "e mudar o volume de cada som na barrinha."),
+                                     "e grava o som no config.json. Vale na hora. Ali também dá para tocar e apagar, "
+                                     "ligar e desligar cada som na caixinha e mudar o volume na barrinha."),
     ("Pelo config.json", "Coloque o arquivo na pasta <b>sons</b> e acrescente uma linha em <b>\"sons\"</b>, "
-                         "por exemplo <b>\"zap\": {\"arquivo\": \"zap.mp3\", \"volume\": 40}</b> (seção 9). "
+                         "por exemplo <b>\"zap\": {\"arquivo\": \"zap.mp3\", \"volume\": 40, \"ligado\": true}</b> (seção 9). "
                          "Vale quando o programa abre de novo."),
 ]))
 s.append(dica(f"O programa já vem com 7 sons: {cmd('!ai')}, {cmd('!ban')} e {cmd('!banido')}, {cmd('!cano')} e "
               f"{cmd('!quecano')}, {cmd('!zap')} e {cmd('!fah')}. Os que você acrescentar não vêm no zip, então extrair uma "
               "versão nova por cima não apaga os seus."))
 s.append(atencao(f"Depois de um som, os outros esperam <b>10 segundos</b> ({cmd('!esperasom 5')} muda), para o "
-                 "chat não virar uma mesa de som. Você e os mods não esperam. No !mudo, os sons não tocam. Um som "
+                 "chat não virar uma mesa de som. Você e os mods não esperam. No !mudo, os sons não tocam. "
+                 f"{cmd('!desligar zap')} desliga um som (e {cmd('!ligar zap')} liga de novo). Um som "
                  "com o nome de um comando do programa (como pedir) fica de fora."))
 
 # ---------- 5 ----------
@@ -668,9 +670,10 @@ s.append(opcoes([
     ("espera_comando", "Segundos que cada pessoa espera entre um comando e outro (anti-spam). "
                        "Não vale para você e os moderadores."),
     ("espera_som", "Segundos entre um som e outro, para o chat todo. Não vale para você e os moderadores."),
-    ("sons", "Os comandos de som: o comando, sem o !, o arquivo da pasta sons e o volume do som, de 0 a 100 "
-             "(uma parte do volume geral: 100 = igual à voz). "
-             "Ex.: <b>{\"zap\": {\"arquivo\": \"zap.mp3\", \"volume\": 40}}</b>. Mais fácil pela página, em Sons."),
+    ("sons", "Os comandos de som: o comando, sem o !, o arquivo da pasta sons, o volume do som, de 0 a 100 "
+             "(uma parte do volume geral: 100 = igual à voz), e se ele está ligado (true ou false). "
+             "Ex.: <b>{\"zap\": {\"arquivo\": \"zap.mp3\", \"volume\": 40, \"ligado\": true}}</b>. "
+             "Mais fácil pela página, em Sons."),
     ("comandos_desativados", "Comandos desligados, sem o !. Eles passam a ser ignorados em silêncio "
                              "e saem do !comandos. Ex.: <b>[\"copiar\", \"top\"]</b>."),
 ]))
