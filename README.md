@@ -234,23 +234,28 @@ são ignorados em silêncio. Você e os moderadores não têm esse limite.
 Você cria comandos que tocam um áudio: o som **ai** toca quando alguém escreve `!ai`.
 Todo mundo pode usar, e o som entra na fila da voz, então nunca toca por cima de uma fala.
 
-Os sons ficam no `config.json`, na opção `sons`: cada linha é o comando (sem o `!`) e o arquivo
-que ele toca. Os arquivos ficam na pasta `sons`, ao lado do programa.
+Os sons ficam no `config.json`, na opção `sons`: cada item é o comando (sem o `!`), o arquivo
+que ele toca e o volume dele, de `0` a `100`. Os arquivos ficam na pasta `sons`, ao lado do programa.
 
 ```json
 "sons": {
-  "ai": "ai.mp3",
-  "banido": "banido_FzWiL58.mp3",
-  "zap": "som-do-zap-zap-estourado.mp3"
+  "ai": {"arquivo": "ai.mp3", "volume": 100},
+  "banido": {"arquivo": "banido_FzWiL58.mp3", "volume": 60},
+  "zap": {"arquivo": "som-do-zap-zap-estourado.mp3", "volume": 40}
 }
 ```
+
+O volume do som é uma parte do volume geral (`volume` / `!volume`): com `100` o som sai na mesma
+altura da voz, com `50` na metade. Na página, cada som tem uma barrinha de volume, que vale na hora
+e já grava no `config.json`. O jeito antigo, só `"ai": "ai.mp3"`, ainda funciona (vale como volume
+`100`), e o programa regrava no jeito novo ao abrir.
 
 Para criar um som, tem dois jeitos:
 
 - **Pela página de configurações**, na parte **Sons** (o mais fácil): escreva o nome do comando,
   escolha o arquivo (`.mp3` ou `.wav`, até 5 MB) e clique em **Adicionar**. A página copia o arquivo
-  para a pasta `sons` e coloca o som no `config.json`. Vale na hora. Ali também dá para tocar e
-  apagar os sons.
+  para a pasta `sons` e coloca o som no `config.json`. Vale na hora. Ali também dá para tocar,
+  apagar e mudar o volume dos sons.
 - **Pelo `config.json`**: coloque o arquivo na pasta `sons`, feche o programa, acrescente uma linha
   em `"sons"` e abra de novo. Dá para usar um arquivo de outra pasta com o caminho completo
   (`"C:\\Sons\\ai.mp3"`, com as barras dobradas).
@@ -278,7 +283,7 @@ sons não tocam. Para desligar um som: `!desligar ai`, ou desmarque em **Comando
 
 | Configuração | O que faz | Padrão |
 |---|---|---|
-| `sons` | Os comandos de som: `{"comando": "arquivo"}` | os 7 sons padrão (abaixo) |
+| `sons` | Os comandos de som: `{"comando": {"arquivo": "ai.mp3", "volume": 100}}` | os 7 sons padrão (abaixo) |
 | `espera_som` | Segundos entre um som e outro, para o chat todo | `10` |
 
 ---
@@ -500,7 +505,7 @@ configurações. Os comandos de chat que mudam uma configuração gravam no
 | Quem é moderador | `!mod` / `!desmod usuario` (só você) | `"moderadores": ["usuario"]` |
 | Tempo anti-spam | `!espera N` | `"espera_comando": N` |
 | Tempo entre sons | `!esperasom N` | `"espera_som": N` |
-| Comandos de som | página, parte **Sons** | `"sons": {"ai": "ai.mp3"}` |
+| Comandos de som e o volume de cada um | página, parte **Sons** | `"sons": {"ai": {"arquivo": "ai.mp3", "volume": 100}}` |
 | Tamanho das mensagens lidas | `!tamanho N` | `"tamanho_maximo": N` |
 | Fila de fala | `!fila N` | `"fila_maxima": N` |
 | Tamanho da fila de pedidos | `!limitepedidos N` | `"pedidos_maximos": N` |

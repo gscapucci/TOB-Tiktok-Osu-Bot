@@ -91,10 +91,16 @@ PREFIXO = "!"
 MODERADORES = []        # usuários (sem @) que podem usar os comandos de moderação, além de você
 ESPERA_COMANDO = 15     # segundos que cada pessoa espera entre um comando e outro
 ESPERA_SOM = 10         # depois de um som (!ai), segundos até o chat poder tocar outro
-# comandos de som: "comando": "arquivo da pasta sons" (aceita caminho completo). Os arquivos destes vêm no zip.
-SONS = {"ai": "ai-ai-ai.mp3", "ban": "banido_FzWiL58.mp3", "banido": "banido_FzWiL58.mp3",
-        "quecano": "metal-pipe-clang.mp3", "cano": "metal-pipe-clang.mp3", "zap": "som-do-zap-zap-estourado.mp3",
-        "fah": "fahhhhhhhhhhhhhh.mp3"}
+# comandos de som: "comando": {"arquivo": "arquivo da pasta sons" (aceita caminho completo), "volume": 0 a 100}.
+# O volume do som é uma parte do volume geral (100 = igual à voz). No config.json também vale só "comando": "arquivo".
+# Os arquivos destes vêm no zip.
+SONS = {"ai": {"arquivo": "ai-ai-ai.mp3", "volume": 100},
+        "ban": {"arquivo": "banido_FzWiL58.mp3", "volume": 100},
+        "banido": {"arquivo": "banido_FzWiL58.mp3", "volume": 100},
+        "quecano": {"arquivo": "metal-pipe-clang.mp3", "volume": 100},
+        "cano": {"arquivo": "metal-pipe-clang.mp3", "volume": 100},
+        "zap": {"arquivo": "som-do-zap-zap-estourado.mp3", "volume": 100},
+        "fah": {"arquivo": "fahhhhhhhhhhhhhh.mp3", "volume": 100}}
 PEDIDOS_MAXIMOS = 30    # tamanho máximo da fila de pedidos de mapas do osu!
 PEDIDOS_POR_PESSOA = 1  # quantos pedidos cada pessoa pode ter na fila ao mesmo tempo (0 = sem limite)
 FILA_PEDIDOS = True     # False: cada !pedir vai direto para o seu chat do osu!, sem fila e sem a voz anunciar
@@ -181,7 +187,7 @@ def aplicar_config(config: dict) -> list:
         ok = isinstance(valor, esperado) and not (esperado is int and isinstance(valor, bool))
         if ok and esperado is list:
             ok = all(isinstance(x, str) for x in valor)
-        if ok and esperado is dict:
+        if ok and esperado is dict and nome != "SONS":  # os sons são conferidos em conferir_sons
             ok = all(isinstance(k, str) and isinstance(v, str) for k, v in valor.items())
         if not ok:
             avisos.append(f"\"{chave}\" deveria ser {TIPOS.get(esperado, esperado.__name__)}. "
@@ -234,10 +240,16 @@ def carregar_config():
     # versão nova com opções novas: acrescenta só elas, com o valor padrão, sem mexer no resto.
     # Com algum aviso não grava, para não apagar o que a pessoa ainda precisa corrigir.
     novas = [chave for chave in OPCOES if chave not in {c.lower() for c in config}]
-    if novas and not avisos:
+    # sons no jeito antigo ("ai": "ai.mp3") são regravados com o volume, para a pessoa ver onde mudar
+    sons_antigos = any(isinstance(v, str) for c, sons in config.items() if c.lower() == "sons"
+                       and isinstance(sons, dict) for v in sons.values())
+    if (novas or sons_antigos) and not avisos:
         try:
             salvar_config()
-            print(f"Opções novas no config.json (com o valor padrão): {', '.join(novas)}\n")
+            if novas:
+                print(f"Opções novas no config.json (com o valor padrão): {', '.join(novas)}\n")
+            if sons_antigos:
+                print("Os sons do config.json agora têm \"volume\" (de 0 a 100) ao lado do arquivo.\n")
         except OSError:
             pass
 
@@ -314,15 +326,16 @@ def salvador_automatico(arquivo):
             pass  # arquivo aberto no Excel; tenta de novo depois
 
 
-def tocar_mp3(caminho: str, enquanto=None):
+def tocar_mp3(caminho: str, enquanto=None, volume=100):
     """Toca um mp3 (ou wav) com o player nativo do Windows (MCI) e espera terminar.
-    enquanto: chamada sem parar durante o som (o narrador usa para já baixar a próxima fala)."""
+    enquanto: chamada sem parar durante o som (o narrador usa para já baixar a próxima fala).
+    volume: de 0 a 100, uma parte do VOLUME geral (os sons do chat têm o volume de cada um)."""
     import ctypes
     mci = ctypes.windll.winmm.mciSendStringW
     if mci(f'open "{caminho}" type mpegvideo alias fala', None, 0, None):
         raise OSError(f"não consegui abrir {os.path.basename(caminho)}")
     try:
-        mci(f"setaudio fala volume to {VOLUME * 10}", None, 0, None)
+        mci(f"setaudio fala volume to {round(VOLUME * volume / 10)}", None, 0, None)
         if enquanto is None:
             mci("play fala wait", None, 0, None)
             return
@@ -425,8 +438,8 @@ def narrador():
     while True:
         texto = proxima_fala()
         try:
-            if isinstance(texto, tuple):  # ("som", arquivo): um !ai, por exemplo
-                tocar_mp3(texto[1], preparar_proxima)
+            if isinstance(texto, tuple):  # ("som", arquivo, volume): um !ai, por exemplo
+                tocar_mp3(texto[1], preparar_proxima, texto[2])
                 continue
             if VOZ == "windows" or time.time() < tentar_neural_em:
                 falar_windows(texto)
@@ -505,9 +518,9 @@ def falar(texto):
         tem_fala.notify()
 
 
-def tocar_som(caminho: str):
-    """Som de um comando (!ai): entra na fila como as respostas, para não tocar por cima da voz."""
-    falar(("som", caminho))
+def tocar_som(som: dict):
+    """Som de um comando (!ai), {"caminho", "volume"}: entra na fila como as respostas, para não tocar por cima da voz."""
+    falar(("som", som["caminho"], som["volume"]))
 
 
 def falar_chat(uid: str, texto: str):
@@ -521,7 +534,7 @@ def falar_chat(uid: str, texto: str):
 
 def proxima_fala():
     """Espera ter algo para falar e devolve: primeiro as respostas e os avisos, depois o chat.
-    Um som vem como ("som", arquivo); o resto é o texto."""
+    Um som vem como ("som", arquivo, volume); o resto é o texto."""
     with tem_fala:
         while not fila_avisos and not fila_chat:
             tem_fala.wait()
@@ -998,19 +1011,31 @@ def nome_reservado(nome: str) -> bool:
 
 
 def conferir_sons(sons: dict) -> tuple:
-    """Arruma os nomes dos comandos de som ("!Ai" -> "ai") e tira os que não dão.
-    Devolve (sons arrumados, avisos)."""
+    """Arruma os nomes dos comandos de som ("!Ai" -> "ai") e tira os que não dão. Cada som pode vir como
+    "arquivo" ou {"arquivo": "...", "volume": 0 a 100}. Devolve (sons arrumados no segundo jeito, avisos)."""
     limpos, avisos = {}, []
-    for comando, arquivo in sons.items():
+    for comando, valor in sons.items():
         nome = nome_de_som(comando.lstrip(PREFIXO))
-        if not nome or not arquivo.strip():
+        arquivo, volume = valor, 100
+        if isinstance(valor, dict):
+            arquivo, volume = valor.get("arquivo", ""), valor.get("volume", 100)
+            if not isinstance(volume, (int, float)) or isinstance(volume, bool):
+                avisos.append(f"o volume do som \"{comando}\" deveria ser um número de 0 a 100. Usei 100.")
+                volume = 100
+            elif not 0 <= volume <= 100:
+                avisos.append(f"o volume do som \"{comando}\" vai de 0 a 100. Usei {max(0, min(100, round(volume)))}.")
+            volume = max(0, min(100, round(volume)))
+        if not isinstance(arquivo, str):
+            avisos.append(f"o som \"{comando}\" deveria ser \"arquivo\" ou "
+                          f"{{\"arquivo\": \"...\", \"volume\": 100}}. Ignorei.")
+        elif not nome or not arquivo.strip():
             avisos.append(f"o som \"{comando}\" precisa de um nome (letras ou números) e de um arquivo. Ignorei.")
         elif nome_reservado(nome):
             avisos.append(f"\"{comando}\" já é um comando do programa: dê outro nome para esse som. Ignorei.")
         elif nome in limpos:
             avisos.append(f"o som \"{comando}\" aparece duas vezes. Usei o primeiro.")
         else:
-            limpos[nome] = arquivo.strip()
+            limpos[nome] = {"arquivo": arquivo.strip(), "volume": volume}
     return limpos, avisos
 
 
@@ -1020,15 +1045,15 @@ def caminho_do_som(arquivo: str) -> str:
 
 
 def sons_configurados() -> tuple:
-    """Devolve ({comando: arquivo}, [avisos dos sons cujo arquivo não existe]).
+    """Devolve ({comando: {"caminho", "volume"}}, [avisos dos sons cujo arquivo não existe]).
     O arquivo é conferido a cada vez: se a pessoa colocar o arquivo durante a live, já vale."""
     sons, faltando = {}, []
-    for nome, arquivo in SONS.items():
-        caminho = caminho_do_som(arquivo)
+    for nome, som in SONS.items():
+        caminho = caminho_do_som(som["arquivo"])
         if os.path.isfile(caminho):
-            sons[nome] = caminho
+            sons[nome] = {"caminho": caminho, "volume": som["volume"]}
         else:
-            faltando.append(f"{PREFIXO}{nome}: não achei o arquivo {arquivo}")
+            faltando.append(f"{PREFIXO}{nome}: não achei o arquivo {som['arquivo']}")
     return sons, faltando
 
 
@@ -1468,30 +1493,38 @@ class PaginaConfig(http.server.BaseHTTPRequestHandler):
                   grupo("Só você", COMANDOS_DONO)]
         if sons:
             grupos.append({"titulo": "Sons (todo mundo)", "comandos": [
-                {"cmd": n, "descricao": f"Toca {SONS[n]}.", "atalhos": []} for n in sons]})
+                {"cmd": n, "descricao": f"Toca {SONS[n]['arquivo']}.", "atalhos": []} for n in sons]})
         return {"config": config, "comandos": TODOS_COMANDOS, "apelidos": APELIDOS_COMANDO, "grupos": grupos,
-                "sons": [{"nome": n, "arquivo": a, "existe": n in sons} for n, a in SONS.items()],
+                "sons": [{"nome": n, "arquivo": s["arquivo"], "volume": s["volume"], "existe": n in sons}
+                         for n, s in SONS.items()],
                 "sons_faltando": faltando, "senha_salva": bool(OSU_IRC_SENHA.strip())}
 
     def mexer_nos_sons(self, d: dict):
-        """Página: tocar, apagar ou adicionar um som. Devolve (resposta, código)."""
+        """Página: tocar, apagar, adicionar ou mudar o volume de um som. Devolve (resposta, código)."""
         acao = d.get("acao")
         nome = nome_de_som(str(d.get("nome", "")))
-        if acao in ("tocar", "apagar") and nome not in SONS:
+        if acao in ("tocar", "apagar", "volume") and nome not in SONS:
             return {"erro": "Não achei esse som. Clique em Recarregar."}, 404
         if acao == "tocar":
-            caminho = sons_disponiveis().get(nome)
-            if not caminho:
-                return {"erro": f"Não achei o arquivo {SONS[nome]} na pasta sons."}, 404
-            tocar_som(caminho)
+            som = sons_disponiveis().get(nome)
+            if not som:
+                return {"erro": f"Não achei o arquivo {SONS[nome]['arquivo']} na pasta sons."}, 404
+            tocar_som(som)
             return {"mensagem": f"Tocando {PREFIXO}{nome}."}, 200
+        if acao == "volume":
+            volume = d.get("volume")
+            if not isinstance(volume, int) or isinstance(volume, bool) or not 0 <= volume <= 100:
+                return {"erro": "O volume vai de 0 a 100."}, 400
+            mudar_config({"sons": {**SONS, nome: {**SONS[nome], "volume": volume}}})
+            print(f"[volume do som {PREFIXO}{nome}: {volume}, pela página]")
+            return {"mensagem": f"Volume do {PREFIXO}{nome}: {volume}.", **self.dados_da_pagina()}, 200
         if acao == "apagar":
-            arquivo = SONS[nome]
-            mudar_config({"sons": {n: a for n, a in SONS.items() if n != nome}})
+            arquivo = SONS[nome]["arquivo"]
+            mudar_config({"sons": {n: s for n, s in SONS.items() if n != nome}})
             print(f"[som {PREFIXO}{nome} apagado pela página]")
             mensagem = f"Som {PREFIXO}{nome} apagado."
             # o arquivo só vai embora se for da pasta sons e nenhum outro som usar
-            if not os.path.isabs(arquivo) and arquivo not in SONS.values():
+            if not os.path.isabs(arquivo) and arquivo not in (s["arquivo"] for s in SONS.values()):
                 try:
                     os.remove(caminho_do_som(arquivo))
                 except FileNotFoundError:
@@ -1531,7 +1564,7 @@ class PaginaConfig(http.server.BaseHTTPRequestHandler):
                 saida.write(conteudo)
         except OSError as e:
             return {"erro": f"Não consegui gravar o arquivo ({e})."}, 500
-        mudar_config({"sons": {**SONS, nome: arquivo}})
+        mudar_config({"sons": {**SONS, nome: {"arquivo": arquivo, "volume": 100}}})
         print(f"[som {PREFIXO}{nome} criado pela página]")
         return {"mensagem": f"Pronto: {PREFIXO}{nome} já funciona no chat.", **self.dados_da_pagina()}, 200
 
@@ -1728,6 +1761,10 @@ label.check input { margin-top: 4px; }
 .som { display: flex; gap: 8px; align-items: center; padding: 6px 0; border-top: 1px solid var(--borda); }
 .som span { flex: 1; min-width: 0; overflow-wrap: anywhere; }
 .som button { padding: 5px 12px; }
+.som .vol { display: flex; gap: 6px; align-items: center; flex: 0 1 170px; min-width: 110px; margin: 0; font-weight: 400; }
+.som .vol input { flex: 1; min-width: 0; }
+.som .vol output { min-width: 3ch; text-align: right; font-variant-numeric: tabular-nums; font-size: 13px; }
+@media (max-width: 520px) { .som { flex-wrap: wrap; } .som span { flex-basis: 100%; } .som .vol { flex: 1 1 auto; } }
 .novo { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
 .novo input[type=text] { flex: 1 1 140px; width: auto; }
 .novo input[type=file] { flex: 1 1 200px; min-width: 0; }
@@ -1822,7 +1859,8 @@ button.principal { background: var(--destaque); border-color: var(--destaque); c
   <section>
     <h2>Sons</h2>
     <p class="sub" style="margin:4px 0 0">Cada som vira um comando que todo mundo pode usar: o som <b>ai</b> toca com
-      <code>!ai</code>. O <code>!sons</code> fala a lista. No mudo, os sons não tocam.</p>
+      <code>!ai</code>. O <code>!sons</code> fala a lista. No mudo, os sons não tocam. A barrinha de cada som é o volume dele
+      (100 = igual ao volume da voz): muda na hora e fica no config.json.</p>
     <div id="lista_sons"></div>
     <small id="sons_faltando" style="color:var(--erro)"></small>
     <label for="som_nome">Novo som<small>O nome do comando (só letras e números) e um arquivo .mp3 ou .wav de até 5 MB.
@@ -1901,16 +1939,22 @@ function mostrarSons(d) {
     const linha = el("div", "som"), texto = el("span"), tocar = el("button", "", "Tocar"), apagar = el("button", "", "Apagar");
     tocar.type = apagar.type = "button";
     texto.append(el("code", "", p + s.nome), el("small", "", s.arquivo + (s.existe ? "" : " (arquivo não encontrado)")));
+    const vol = el("label", "vol"), barra = el("input"), valor = el("output", "", String(s.volume));
+    barra.type = "range"; barra.min = 0; barra.max = 100; barra.value = s.volume;
+    barra.setAttribute("aria-label", "Volume do " + p + s.nome);
+    barra.oninput = () => valor.textContent = barra.value;
+    barra.onchange = () => sons({acao: "volume", nome: s.nome, volume: Number(barra.value)});
+    vol.append(barra, valor);
     tocar.onclick = () => sons({acao: "tocar", nome: s.nome});
     apagar.onclick = () => confirm("Apagar o som " + p + s.nome + "?") && sons({acao: "apagar", nome: s.nome});
-    linha.append(texto, tocar, apagar);
+    linha.append(texto, vol, tocar, apagar);
     return linha;
   }) : [el("small", "", "Nenhum som ainda.")]));
   $("sons_faltando").textContent = d.sons_faltando.length ? "Estes não tocam, porque o arquivo não está na pasta sons: " +
     d.sons_faltando.join("; ") + "." : "";
 }
 
-// tocar, apagar ou adicionar um som. Devolve true se deu certo.
+// tocar, apagar, adicionar ou mudar o volume de um som. Devolve true se deu certo.
 async function sons(pedido) {
   try {
     const r = await fetch("/api/sons", {method: "POST", headers: {"Content-Type": "application/json"},

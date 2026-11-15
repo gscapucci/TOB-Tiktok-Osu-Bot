@@ -33,7 +33,7 @@ def sons_padrao() -> list:
     arvore = ast.parse(open(os.path.join(PASTA, "leitor_chat.py"), encoding="utf-8").read())
     for no in arvore.body:
         if isinstance(no, ast.Assign) and getattr(no.targets[0], "id", "") == "SONS":
-            return sorted(set(ast.literal_eval(no.value).values()))
+            return sorted({som["arquivo"] for som in ast.literal_eval(no.value).values()})
     return []
 
 
