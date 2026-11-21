@@ -136,7 +136,7 @@ Se faltar alguma opção (por exemplo, uma opção nova de uma versão mais nova
 programa), ele acrescenta só ela, com o valor padrão, sem mexer nas outras.
 
 **Para atualizar o programa**, extraia o zip da versão nova por cima da pasta.
-O zip não traz o `config.json` (nem `apelidos.txt`, `pedidos.txt` e
+O zip não traz o `config.json` (nem `apelidos.txt`, `pedidos.txt`, `pedidos_por_presente.json` e
 `registros\`), então as suas configurações continuam as mesmas.
 
 ### D) Desligar comandos específicos
@@ -292,6 +292,36 @@ sons não tocam. Para desligar um som: `!desligar ai`, ou desmarque a caixinha d
 | `sons` | Os comandos de som: `{"comando": {"arquivo": "ai.mp3", "volume": 100, "ligado": true}}` | os 7 sons padrão (abaixo) |
 | `espera_som` | Segundos entre um som e outro, para o chat todo | `10` |
 
+### Presentes
+
+Um presente da live pode tocar um dos sons: por exemplo, quando alguém manda uma **Rose**, toca o
+`!fah`. Dá para escolher um som diferente para cada presente.
+
+- **Pela página de configurações**, na parte **Presentes**: escreva o nome do presente, escolha o
+  som e clique em **Adicionar**. Os presentes que já chegaram na live aparecem como sugestão ao
+  clicar na caixa do nome. Ali também dá para trocar o som, testar e tirar.
+- **Pelo `config.json`**, na opção `presentes`: o nome do presente e o som (sem o `!`):
+
+```json
+"presentes": {
+  "Rose": "fah",
+  "Finger Heart": "zap"
+}
+```
+
+O nome do presente é o que aparece na janela do programa quando alguém manda um
+(`[presente Rose de Fulano]`); maiúsculas e espaços tanto faz. Numa sequência de presentes (combo),
+o som toca uma vez só, no começo. O som do presente não espera o `espera_som` e toca mesmo com o
+som desligado (o desligado vale só para o comando do chat, então dá para ter um som que só toca com
+presente). No `!mudo`, e para as pessoas silenciadas, não toca. Apagar um som pela página tira
+também os presentes que usavam ele.
+
+No modo de teste, `#presente Rose` (ou `Fulano: #presente Rose`) simula um presente.
+
+| Configuração | O que faz | Padrão |
+|---|---|---|
+| `presentes` | Qual som cada presente toca: `{"Rose": "fah"}` | `{}` (nenhum) |
+
 ---
 
 ## 5. Comandos de moderação
@@ -396,6 +426,7 @@ O chat pede mapas, eles entram numa fila e você abre um de cada vez.
 | `!limitepedidos 20` | Você/mods | Muda o tamanho máximo da fila (fica gravado) |
 | `!porpessoa 2` | Você/mods | Muda quantos pedidos cada pessoa pode ter na fila; `0` = sem limite (fica gravado) |
 | `!filapedidos` | Você/mods | Liga/desliga a fila. Desligada, cada pedido vai direto para o seu chat do osu!, sem a voz anunciar (fica gravado) |
+| `!pedidopresente` | Você/mods | Liga/desliga o pedido por presente: cada presente vale um `!pedir` (fica gravado) |
 
 - **No chat do osu!:** com o seu nome e a senha de IRC preenchidos (na seção osu! da página de configurações, ou
   `osu_usuario` e `osu_irc_senha` no `config.json`), o `!proximo`
@@ -424,12 +455,23 @@ O chat pede mapas, eles entram numa fila e você abre um de cada vez.
   e a espera entre comandos continuam valendo. Precisa do chat do osu! configurado; se o envio falhar
   (ou o chat não estiver configurado), a voz avisa e o pedido fica guardado na fila, para sair com o
   `!proximo` (o navegador não abre sozinho no meio da partida).
+- **Pedir só com presente** (vem desligado; `!pedidopresente`, a caixinha na parte **Pedidos de mapas**
+  da página, ou `"pedir_com_presente": true`): cada presente que a pessoa manda vale **um pedido**.
+  Numa sequência, cada presente conta (5 rosas = 5 pedidos), mas o limite por pessoa continua valendo:
+  quem tem 5 pedidos e `pedidos_por_pessoa` 1 pede um, espera ser atendido e pede o próximo.
+  Quem manda o primeiro presente ouve "valeu pelo presente! Agora você pode pedir um mapa";
+  quem pede sem ter mandado ouve como fazer, e o `!pedidos` fala quantos a pessoa ainda pode pedir.
+  Se o pedido sair da fila sem ser atendido (`!cancelar`, `!remover`, `!zerarpedidos`), a pessoa
+  pode pedir de novo. Só presentes que chegam com a opção ligada contam. O que cada um ainda pode
+  pedir fica no arquivo `pedidos_por_presente.json` e continua lá mesmo fechando o programa ou
+  numa outra live. Você e os mods pedem sem presente.
 
 | Configuração | O que faz | Padrão |
 |---|---|---|
 | `pedidos_maximos` | Tamanho máximo da fila | `30` |
 | `pedidos_por_pessoa` | Quantos pedidos cada pessoa pode ter na fila ao mesmo tempo (`0` = sem limite) | `1` |
 | `fila_pedidos` | `false`: pedidos vão direto para o chat do osu!, sem fila e sem a voz anunciar | `true` |
+| `pedir_com_presente` | `true`: cada presente que a pessoa manda vale um `!pedir` | `false` |
 | Desligar tudo | `"comandos_desativados": ["pedir", "pedidos", "cancelar", "proximo", "remover", "fecharpedidos", "abrirpedidos", "zerarpedidos"]` | — |
 
 ---
@@ -482,6 +524,7 @@ Todos ficam na mesma pasta do programa.
 | `registros\live_DATA_HORA.csv` | Planilha (abre no Excel) com quem entrou na live, horário e quantas mensagens mandou. Salva sozinha a cada 5 segundos. As de mais de 7 dias são apagadas sozinhas quando o programa abre (copie para outra pasta a que quiser guardar). |
 | `apelidos.txt` | Apelidos usados pela voz. Pode editar à vontade. |
 | `pedidos.txt` | Fila de pedidos de mapas, atualizada na hora. |
+| `pedidos_por_presente.json` | Com o pedido por presente ligado: quantos pedidos cada pessoa ainda pode fazer. Apagar um nome dali (com o programa fechado) tira os pedidos dela. |
 | `sons\` | Os arquivos dos sons. Qual comando toca cada um fica no `config.json`, em `sons`. |
 
 > Se a planilha estiver aberta no Excel, o programa não consegue salvar —
@@ -512,10 +555,12 @@ configurações. Os comandos de chat que mudam uma configuração gravam no
 | Tempo anti-spam | `!espera N` | `"espera_comando": N` |
 | Tempo entre sons | `!esperasom N` | `"espera_som": N` |
 | Comandos de som, o volume e o ligado de cada um | página, parte **Sons** | `"sons": {"ai": {"arquivo": "ai.mp3", "volume": 100, "ligado": true}}` |
+| Som de cada presente | página, parte **Presentes** | `"presentes": {"Rose": "fah"}` |
 | Tamanho das mensagens lidas | `!tamanho N` | `"tamanho_maximo": N` |
 | Fila de fala | `!fila N` | `"fila_maxima": N` |
 | Tamanho da fila de pedidos | `!limitepedidos N` | `"pedidos_maximos": N` |
 | Pedidos por pessoa | `!porpessoa N` | `"pedidos_por_pessoa": N` |
+| Pedir só com presente | `!pedidopresente` | `"pedir_com_presente": true/false` |
 | Prefixo, tosu, página | — | `"prefixo"`, `"tosu_url"`, `"web_porta"`, `"web_rede_local"`, `"abrir_pagina"` |
 
 ---

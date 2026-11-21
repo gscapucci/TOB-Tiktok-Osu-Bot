@@ -23,11 +23,14 @@ Pedidos de mapas do osu! (a fila fica salva em pedidos.txt):
     Você e MODERADORES:  !proximo (abre no navegador)  !remover <posição>  !fecharpedidos
                          !abrirpedidos  !zerarpedidos  !limitepedidos <número>  !porpessoa <número>
                          !filapedidos (liga/desliga a fila: desligada, cada pedido vai direto para o osu!)
+                         !pedidopresente (liga/desliga: cada presente vale um !pedir)
 
 osu! (o tosu abre sozinho, se estiver na pasta tosu):  !np (mapa atual)  !pp  !rank  !recorde
     e avisos automáticos de mapa novo (AVISAR_MAPA) e de recorde de PP da live (AVISAR_RECORDE)
 
-Sem live: rode com o usuário "teste" e digite as mensagens do chat na janela.
+Presentes: cada presente da live pode tocar um dos sons ("presentes": {"Rose": "fah"} no config.json).
+
+Sem live: rode com o usuário "teste" e digite as mensagens do chat na janela (#presente Rose simula um presente).
 
 Configurações: pelo config.json ou pela página http://localhost:8765 (WEB_PORTA),
     que muda tudo na hora, sem reabrir o programa.
@@ -53,7 +56,7 @@ from datetime import datetime, timedelta, timezone
 
 from TikTokLive import TikTokLiveClient
 from TikTokLive.client.errors import UserNotFoundError, UserOfflineError
-from TikTokLive.events import CommentEvent, ConnectEvent, DisconnectEvent, JoinEvent
+from TikTokLive.events import CommentEvent, ConnectEvent, DisconnectEvent, GiftEvent, JoinEvent
 
 # ---------------- Configurações ----------------
 # Estes são os valores padrão. Para mudar, use a página de configurações ou edite o
@@ -102,9 +105,13 @@ SONS = {"ai": {"arquivo": "ai-ai-ai.mp3", "volume": 100, "ligado": True},
         "cano": {"arquivo": "metal-pipe-clang.mp3", "volume": 100, "ligado": True},
         "zap": {"arquivo": "som-do-zap-zap-estourado.mp3", "volume": 100, "ligado": True},
         "fah": {"arquivo": "fahhhhhhhhhhhhhh.mp3", "volume": 100, "ligado": True}}
+# presentes da live que tocam um dos SONS: "nome do presente": "som". ex.: {"Rose": "fah", "GG": "ai"}
+# O nome é o que aparece na janela quando alguém manda o presente (maiúsculas e espaços tanto faz).
+PRESENTES = {}
 PEDIDOS_MAXIMOS = 30    # tamanho máximo da fila de pedidos de mapas do osu!
 PEDIDOS_POR_PESSOA = 1  # quantos pedidos cada pessoa pode ter na fila ao mesmo tempo (0 = sem limite)
 FILA_PEDIDOS = True     # False: cada !pedir vai direto para o seu chat do osu!, sem fila e sem a voz anunciar
+PEDIR_COM_PRESENTE = False  # True: cada presente que a pessoa manda vale um !pedir (você e os mods não precisam)
 COMANDOS_DESATIVADOS = []  # comandos desligados, sem o "!". ex.: ["copiar", "top"]
 
 # osu! (precisa do tosu aberto junto com o jogo)
@@ -138,7 +145,7 @@ PASTA_SONS = os.path.join(PASTA, "sons")  # onde ficam os arquivos dos SONS (a p
 # nome no config.json -> variável aqui do programa
 OPCOES = {nome.lower(): nome for nome in (
     "TIKTOK_USUARIO", "VOZ", "VELOCIDADE", "VOLUME", "LER_NOME", "TAMANHO_MAXIMO", "FILA_MAXIMA", "PALAVRAS_BLOQUEADAS",
-    "USUARIOS_SILENCIADOS", "PREFIXO", "MODERADORES", "ESPERA_COMANDO", "ESPERA_SOM", "SONS", "PEDIDOS_MAXIMOS", "PEDIDOS_POR_PESSOA", "FILA_PEDIDOS", "COMANDOS_DESATIVADOS",
+    "USUARIOS_SILENCIADOS", "PREFIXO", "MODERADORES", "ESPERA_COMANDO", "ESPERA_SOM", "SONS", "PRESENTES", "PEDIDOS_MAXIMOS", "PEDIDOS_POR_PESSOA", "FILA_PEDIDOS", "PEDIR_COM_PRESENTE", "COMANDOS_DESATIVADOS",
     "TOSU_URL", "AVISAR_MAPA", "AVISAR_RECORDE", "OSU_USUARIO", "OSU_IRC_SENHA", "WEB_PORTA", "WEB_REDE_LOCAL", "ABRIR_PAGINA")}
 OPCOES_ANTIGAS = ("janela_pedidos",)  # opções de versões anteriores: ignoradas sem aviso
 SECRETAS = ("osu_irc_senha",)  # a página nunca mostra: só diz se tem uma salva e deixa trocar
@@ -200,6 +207,9 @@ def aplicar_config(config: dict) -> list:
         if nome == "SONS":
             valor, avisos_sons = conferir_sons(valor)
             avisos += avisos_sons
+        if nome == "PRESENTES":
+            valor, avisos_presentes = conferir_presentes(valor)
+            avisos += avisos_presentes
         if nome == "PREFIXO" and not valor.strip():
             avisos.append(f"\"{chave}\" não pode ficar vazio. Mantive: {json.dumps(atual, ensure_ascii=False)}")
             continue
@@ -240,6 +250,9 @@ def carregar_config():
         print(f"*** config.json: {aviso}")
     for aviso in sons_configurados()[1]:
         print(f"*** som {aviso}")
+    for presente, som in PRESENTES.items():
+        if som not in SONS:
+            print(f"*** presente \"{presente}\": não tem nenhum som {PREFIXO}{som} em \"sons\".")
     # versão nova com opções novas: acrescenta só elas, com o valor padrão, sem mexer no resto.
     # Com algum aviso não grava, para não apagar o que a pessoa ainda precisa corrigir.
     novas = [chave for chave in OPCOES if chave not in {c.lower() for c in config}]
@@ -615,6 +628,46 @@ def copiar_texto(texto: str):
 ARQUIVO_PEDIDOS = os.path.join(PASTA, "pedidos.txt")
 pedidos = []            # [{"uid", "nome", "texto", "url"}], na ordem em que chegaram
 pedidos_abertos = True  # !fecharpedidos / !abrirpedidos
+# PEDIR_COM_PRESENTE: quantos pedidos cada pessoa ainda pode fazer. Fica gravado, porque a pessoa pagou:
+# se o programa fechar, ou a live acabar antes de ela pedir, o crédito continua lá na próxima.
+ARQUIVO_CREDITOS = os.path.join(PASTA, "pedidos_por_presente.json")
+creditos = {}           # usuário em minúsculo -> pedidos que a pessoa ainda pode fazer
+trava_creditos = threading.Lock()
+
+
+def carregar_creditos():
+    global creditos
+    try:
+        with open(ARQUIVO_CREDITOS, encoding="utf-8") as f:
+            dados = json.load(f)
+        creditos = {str(u).lower(): n for u, n in dados.items() if isinstance(n, int) and n > 0}
+    except FileNotFoundError:
+        pass
+    except (ValueError, OSError, AttributeError) as e:
+        print(f"*** Não consegui ler {os.path.basename(ARQUIVO_CREDITOS)} ({e}). Os pedidos por presente "
+              f"começam do zero; o arquivo só é regravado no próximo presente.")
+
+
+def mudar_creditos(uid: str, quanto: int) -> int:
+    """Soma (ou tira, com negativo) pedidos da pessoa e grava. Devolve quantos ela tem agora."""
+    with trava_creditos:
+        n = max(0, creditos.get(uid, 0) + quanto)
+        if n:
+            creditos[uid] = n
+        else:
+            creditos.pop(uid, None)
+        try:
+            with open(ARQUIVO_CREDITOS, "w", encoding="utf-8") as f:
+                json.dump(creditos, f, ensure_ascii=False, indent=2)
+        except OSError as e:
+            print(f"*** Não consegui gravar {os.path.basename(ARQUIVO_CREDITOS)} ({e}).")
+        return n
+
+
+def devolver_credito(p: dict):
+    """Pedido pago com presente que saiu da fila sem ser atendido (!cancelar, !remover, !zerarpedidos)."""
+    if p.get("pago"):
+        mudar_creditos(p["uid"], 1)
 
 
 def link_do_pedido(texto: str) -> str:
@@ -911,7 +964,8 @@ COMANDOS_PUBLICOS = ["np", "pp", "rank", "recorde", "pedir", "pedidos", "cancela
 # !copiar é só de mods: com ele, qualquer um trocaria o seu Ctrl+C por um texto malicioso sem você perceber
 COMANDOS_MOD = ["mudo", "voltar", "limpar", "apelido", "copiar", "velocidade", "volume", "voz", "nomes", "bloquear",
                 "desbloquear", "silenciar", "liberar", "ligar", "desligar", "avisos", "espera", "tamanho", "fila",
-                "esperasom", "proximo", "remover", "fecharpedidos", "abrirpedidos", "zerarpedidos", "limitepedidos", "porpessoa", "filapedidos"]
+                "esperasom", "proximo", "remover", "fecharpedidos", "abrirpedidos", "zerarpedidos", "limitepedidos", "porpessoa", "filapedidos",
+                "pedidopresente"]
 COMANDOS_DONO = ["mod", "desmod"]  # só você: se um mod pudesse criar mods, qualquer um daria acesso a qualquer um
 # atalhos: !vol 70 é o mesmo que !volume 70. Desligar um comando desliga os atalhos dele também.
 APELIDOS_COMANDO = {
@@ -964,6 +1018,7 @@ DESCRICAO_COMANDO = {
     "limitepedidos": "Muda o tamanho máximo da fila de pedidos.",
     "porpessoa": "Muda quantos pedidos cada pessoa pode ter na fila ao mesmo tempo (0 = sem limite). Não vale para você e os mods.",
     "filapedidos": "Liga ou desliga a fila. Desligada, cada pedido vai direto para o seu chat do osu!; se não conseguir mandar, ele fica guardado na fila.",
+    "pedidopresente": "Liga ou desliga o pedido por presente: ligado, cada presente que a pessoa manda vale um !pedir. Não vale para você e os mods.",
     "mod": "Torna alguém moderador (usuário do TikTok, sem @).",
     "desmod": "Tira alguém dos moderadores.",
 }
@@ -991,7 +1046,7 @@ def mover_sons_desligados() -> list:
 
 FALADO = {"proximo": "próximo", "fecharpedidos": "fechar pedidos", "abrirpedidos": "abrir pedidos",
           "zerarpedidos": "zerar pedidos", "limitepedidos": "limite pedidos", "porpessoa": "por pessoa",
-          "filapedidos": "fila pedidos", "esperasom": "espera som"}  # como a voz fala cada comando
+          "filapedidos": "fila pedidos", "esperasom": "espera som", "pedidopresente": "pedido presente"}  # como a voz fala cada comando
 
 # !voz francisca -> nome da voz no config
 VOZES = {"francisca": "pt-BR-FranciscaNeural", "thalita": "pt-BR-ThalitaMultilingualNeural",
@@ -1086,6 +1141,79 @@ def sons_configurados() -> tuple:
 
 def sons_disponiveis() -> dict:
     return sons_configurados()[0]
+
+
+# ---------------- Presentes: um presente da live toca um dos sons (PRESENTES no config.json) ----------------
+presentes_vistos = deque(maxlen=30)  # presentes que chegaram desde que o programa abriu (a página sugere)
+sequencias = {}  # (usuário, presente) -> (horário, quantos até agora): sequência (combo) que já tocou o som
+SEQUENCIA_ESQUECIDA = 60  # sem o aviso de fim da sequência, depois disso ela conta como terminada
+
+
+def conferir_presentes(presentes: dict) -> tuple:
+    """Tira os espaços do nome do presente e arruma o nome do som ("!Fah" -> "fah").
+    Devolve (presentes arrumados, avisos)."""
+    limpos, avisos, vistos = {}, [], set()
+    for presente, som in presentes.items():
+        chave, som = nome_de_som(presente), nome_de_som(som.lstrip(PREFIXO))
+        if not chave or not som:
+            avisos.append(f"o presente \"{presente}\" precisa de um nome e de um som. Ignorei.")
+        elif chave in vistos:
+            avisos.append(f"o presente \"{presente}\" aparece duas vezes. Usei o primeiro.")
+        else:
+            vistos.add(chave)
+            limpos[presente.strip()] = som
+    return limpos, avisos
+
+
+def presente_configurado(presente: str):
+    """O nome como está em PRESENTES ("Rose" acha "rose"), ou None."""
+    return next((p for p in PRESENTES if nome_de_som(p) == nome_de_som(presente)), None)
+
+
+def receber_presente(user, presente: str, id_presente, streaking: bool, quantidade: int, dono: str):
+    """Um presente da live: toca o som dele. Numa sequência (combo) o TikTok avisa a cada toque e no
+    fim; o som toca só no primeiro aviso, para não virar uma metralhadora."""
+    uid = (user.unique_id or "").lower()
+    nome = carregar_apelidos().get(uid, user.nick_name or user.unique_id)
+    agora = time.time()
+    for k in [k for k, (t, _) in sequencias.items() if agora - t > SEQUENCIA_ESQUECIDA]:
+        del sequencias[k]
+    chave = (uid, id_presente or presente)
+    anterior = sequencias.pop(chave, None)
+    if streaking:
+        sequencias[chave] = (agora, max(quantidade, anterior[1] if anterior else 0))
+    # cada aviso da sequência traz o total até ali: conta só os presentes novos
+    novos = max(0, quantidade - anterior[1]) if anterior else quantidade
+    if PEDIR_COM_PRESENTE and novos and uid:
+        n = mudar_creditos(uid, novos)
+        print(f"[{nome} pode pedir {n} {'mapa' if n == 1 else 'mapas'}]")
+        if n == novos and not pausado and not silenciado(uid, dono):  # antes não podia: avisa como pedir
+            falar(f"{nome}, valeu pelo presente! Agora você pode pedir {'um mapa' if n == 1 else f'{n} mapas'} "
+                  f"com exclamação pedir.")
+    if anterior:  # continuação ou fim de uma sequência que já tocou
+        if not streaking and quantidade > 1:
+            print(f"[{nome} mandou {quantidade}x {presente}]")
+        return
+    if presente in presentes_vistos:
+        presentes_vistos.remove(presente)
+    presentes_vistos.append(presente)
+    configurado = presente_configurado(presente)
+    som = PRESENTES[configurado] if configurado else None
+    if som is None:
+        print(f"[presente {presente} de {nome}]")
+        return
+    if silenciado(uid, dono):
+        print(f"[presente {presente} de {nome} (silenciado): o som {PREFIXO}{som} não tocou]")
+        return
+    if pausado:
+        print(f"[presente {presente} de {nome}: no mudo, o som {PREFIXO}{som} não tocou]")
+        return
+    arquivo = sons_disponiveis().get(som)
+    if not arquivo:
+        print(f"[presente {presente} de {nome}: não achei o som {PREFIXO}{som} (ou o arquivo dele)]")
+        return
+    print(f"[presente {presente} de {nome}: som {PREFIXO}{som}]")
+    tocar_som(arquivo)
 
 
 
@@ -1320,6 +1448,7 @@ def tratar_comando(user, nome: str, texto: str, dono: str) -> bool:
                 falar(f"Use: exclamação remover e a posição na fila. Tem {len(pedidos)} na fila.")
                 return True
             salvar_pedidos()
+            devolver_credito(p)
             print(f"[pedido removido, de {p['nome']}: {p['texto']}]")
             falar(f"Pedido de {p['nome']} removido. Faltam {len(pedidos)}.")
             return True
@@ -1332,7 +1461,14 @@ def tratar_comando(user, nome: str, texto: str, dono: str) -> bool:
             falar("Fila de pedidos ligada." if FILA_PEDIDOS else
                   "Fila de pedidos desligada: os pedidos vão direto para o chat do osu.")
             return True
+        if cmd == "pedidopresente":
+            mudar_config({"pedir_com_presente": not PEDIR_COM_PRESENTE})
+            falar("Pedido por presente ligado: cada presente vale um pedido de mapa." if PEDIR_COM_PRESENTE else
+                  "Pedido por presente desligado: todo mundo pode pedir.")
+            return True
         if cmd == "zerarpedidos":
+            for p in pedidos:
+                devolver_credito(p)
             pedidos.clear()
             salvar_pedidos()
             falar("Fila de pedidos zerada.")
@@ -1426,8 +1562,11 @@ def tratar_comando(user, nome: str, texto: str, dono: str) -> bool:
     elif cmd == "pedir":
         meus = [i for i, p in enumerate(pedidos, 1) if p["uid"] == uid]  # posições dos pedidos da pessoa
         no_limite = PEDIDOS_POR_PESSOA and not eh_mod and len(meus) >= PEDIDOS_POR_PESSOA
+        pagar = PEDIR_COM_PRESENTE and not eh_mod  # gasta um dos pedidos que a pessoa ganhou com presente
         if not pedidos_abertos:
             dizer(f"{nome}, os pedidos estão fechados agora.")
+        elif pagar and not creditos.get(uid):
+            dizer(f"{nome}, para pedir um mapa, mande um presente antes. Cada presente vale um pedido.")
         elif not arg:
             dizer(f"{nome}, manda o link, o nome ou o código do mapa depois do comando.")
         elif not FILA_PEDIDOS:  # sem fila: vai direto para o chat do osu!, sem a voz anunciar
@@ -1435,6 +1574,8 @@ def tratar_comando(user, nome: str, texto: str, dono: str) -> bool:
                 dizer(f"{nome}, esse pedido não pode.")
                 return True
             p = {"uid": uid, "nome": nome, "texto": arg, "url": link_do_pedido(arg)}
+            if pagar:  # já foi atendido (ou fica guardado na fila): não volta mais
+                mudar_creditos(uid, -1)
             print(f"[pedido de {nome}: {arg}]\n  {p['url']}")
             threading.Thread(target=abrir_pedido, args=(p, False), daemon=True).start()
         elif no_limite and len(meus) == 1:
@@ -1446,16 +1587,19 @@ def tratar_comando(user, nome: str, texto: str, dono: str) -> bool:
         elif tem_palavra_bloqueada(arg):
             dizer(f"{nome}, esse pedido não pode.")
         else:
-            pedidos.append({"uid": uid, "nome": nome, "texto": arg, "url": link_do_pedido(arg)})
+            pedidos.append({"uid": uid, "nome": nome, "texto": arg, "url": link_do_pedido(arg), "pago": pagar})
             salvar_pedidos()
-            print(f"[novo pedido de {nome}: {arg}]")
-            dizer(f"Pedido de {nome} anotado, posição {len(pedidos)}.")
+            sobra = mudar_creditos(uid, -1) if pagar else 0
+            print(f"[novo pedido de {nome}: {arg}]" + (f" (ainda pode pedir {sobra})" if pagar else ""))
+            dizer(f"Pedido de {nome} anotado, posição {len(pedidos)}." +
+                  (f" Você ainda pode pedir {sobra}." if sobra else ""))
     elif cmd == "cancelar":
         if pedido_meu is None:
             dizer(f"{nome}, você não tem pedido na fila.")
         else:
             p = pedidos.pop(pedido_meu)
             salvar_pedidos()
+            devolver_credito(p)
             print(f"[pedido cancelado por {nome}: {p['texto']}]")
             falta = 0 if eh_mod else ESPERA_COMANDO - (agora - ultimo_comando.get(uid, 0))
             dizer(f"{nome}, pedido cancelado." +
@@ -1474,6 +1618,10 @@ def tratar_comando(user, nome: str, texto: str, dono: str) -> bool:
             texto += f" O seu é o número {meus[0]}."
         elif meus:
             texto += f" Os seus são os números {', '.join(meus[:-1])} e {meus[-1]}."
+        if PEDIR_COM_PRESENTE and not eh_mod:
+            n = creditos.get(uid, 0)
+            texto += f" Você pode pedir {n} {'mapa' if n == 1 else 'mapas'}." if n else \
+                " Para pedir um mapa, mande um presente: cada presente vale um pedido."
         if not pedidos_abertos:
             texto += " Os pedidos estão fechados."
         falar(texto)
@@ -1526,7 +1674,39 @@ class PaginaConfig(http.server.BaseHTTPRequestHandler):
                 "sons": [{"nome": n, "arquivo": s["arquivo"], "volume": s["volume"], "ligado": s["ligado"],
                           "existe": n in sons}
                          for n, s in SONS.items()],
-                "sons_faltando": faltando, "senha_salva": bool(OSU_IRC_SENHA.strip())}
+                "sons_faltando": faltando, "senha_salva": bool(OSU_IRC_SENHA.strip()),
+                "presentes": [{"presente": p, "som": s, "existe": s in SONS} for p, s in PRESENTES.items()],
+                "presentes_vistos": [p for p in reversed(presentes_vistos) if not presente_configurado(p)]}
+
+    def mexer_nos_presentes(self, d: dict):
+        """Página: escolher o som de um presente (novo ou não), testar ou tirar. Devolve (resposta, código)."""
+        acao, presente = d.get("acao"), str(d.get("presente", "")).strip()
+        configurado = presente_configurado(presente)
+        if acao in ("tocar", "apagar") and not configurado:
+            return {"erro": "Não achei esse presente. Clique em Recarregar."}, 404
+        if acao == "tocar":
+            som = sons_disponiveis().get(PRESENTES[configurado])
+            if not som:
+                return {"erro": f"Não achei o som {PREFIXO}{PRESENTES[configurado]} (ou o arquivo dele)."}, 404
+            tocar_som(som)
+            return {"mensagem": f"Tocando o som do {configurado}."}, 200
+        if acao == "apagar":
+            mudar_config({"presentes": {p: s for p, s in PRESENTES.items() if p != configurado}})
+            print(f"[presente {configurado} tirado pela página]")
+            return {"mensagem": f"O {configurado} não toca mais som.", **self.dados_da_pagina()}, 200
+        if acao != "salvar":
+            return {"erro": "dados inválidos"}, 400
+        som = nome_de_som(str(d.get("som", "")))
+        if not nome_de_som(presente):
+            return {"erro": "Escreva o nome do presente, como aparece na janela do programa (ex.: Rose)."}, 400
+        if len(presente) > 40:
+            return {"erro": "Nome comprido demais."}, 400
+        if som not in SONS:
+            return {"erro": "Escolha um dos sons. Para um som novo, crie antes em Sons."}, 400
+        nome = configurado or presente  # mudar o som de um presente que já está na lista mantém o nome dele
+        mudar_config({"presentes": {**PRESENTES, nome: som}})
+        print(f"[presente {nome}: som {PREFIXO}{som}, pela página]")
+        return {"mensagem": f"Pronto: o {nome} toca {PREFIXO}{som}.", **self.dados_da_pagina()}, 200
 
     def mexer_nos_sons(self, d: dict):
         """Página: tocar, apagar, adicionar, ligar/desligar ou mudar o volume de um som. Devolve (resposta, código)."""
@@ -1557,9 +1737,13 @@ class PaginaConfig(http.server.BaseHTTPRequestHandler):
                     **self.dados_da_pagina()}, 200
         if acao == "apagar":
             arquivo = SONS[nome]["arquivo"]
-            mudar_config({"sons": {n: s for n, s in SONS.items() if n != nome}})
+            de_presentes = [p for p, s in PRESENTES.items() if s == nome]
+            mudar_config({"sons": {n: s for n, s in SONS.items() if n != nome},
+                          "presentes": {p: s for p, s in PRESENTES.items() if s != nome}})
             print(f"[som {PREFIXO}{nome} apagado pela página]")
             mensagem = f"Som {PREFIXO}{nome} apagado."
+            if de_presentes:
+                mensagem += f" Estes presentes não tocam mais som: {', '.join(de_presentes)}."
             # o arquivo só vai embora se for da pasta sons e nenhum outro som usar
             if not os.path.isabs(arquivo) and arquivo not in (s["arquivo"] for s in SONS.values()):
                 try:
@@ -1620,13 +1804,14 @@ class PaginaConfig(http.server.BaseHTTPRequestHandler):
         elif caminho == "/api/pedidos":
             # só o que aparece na tela: nome e pedido (o @ e o link ficam de fora)
             self.responder_json({"pedidos": [{"nome": x["nome"], "texto": x["texto"]} for x in list(pedidos)],
-                                 "abertos": pedidos_abertos, "fila": FILA_PEDIDOS, "prefixo": PREFIXO})
+                                 "abertos": pedidos_abertos, "fila": FILA_PEDIDOS, "prefixo": PREFIXO,
+                                 "presente": PEDIR_COM_PRESENTE})
         else:
             self.responder(404, "text/plain; charset=utf-8", b"nada aqui")
 
     def do_POST(self):
         # exigir JSON faz o navegador barrar envios vindos de outros sites
-        if not self.host_ok() or self.path not in ("/api/config", "/api/sons") or \
+        if not self.host_ok() or self.path not in ("/api/config", "/api/sons", "/api/presentes") or \
                 not (self.headers.get("Content-Type") or "").startswith("application/json"):
             return self.responder(403, "text/plain; charset=utf-8", b"acesso negado")
         try:
@@ -1640,6 +1825,8 @@ class PaginaConfig(http.server.BaseHTTPRequestHandler):
             return self.responder_json({"erro": "dados inválidos"}, 400)
         if self.path == "/api/sons":
             return self.responder_json(*self.mexer_nos_sons(dados))
+        if self.path == "/api/presentes":
+            return self.responder_json(*self.mexer_nos_presentes(dados))
         # senha em branco = continua a que já está salva (a página nunca recebe a senha para mandar de volta)
         dados = {k: v for k, v in dados.items()
                  if k.lower() not in SECRETAS or (isinstance(v, str) and v.strip())}
@@ -1708,7 +1895,8 @@ async function atualizar() {
   // como pedir fica sempre à vista enquanto os pedidos estão abertos, com ou sem gente na fila
   $("extra").replaceChildren(...[
     n > MAX ? el("div", "mais", `+ ${n - MAX} na fila`) : null,
-    d.abertos ? el("div", "vazio", `Peça com ${d.prefixo}pedir <link, nome ou código>`) : null,
+    d.abertos ? el("div", "vazio", (d.presente ? "Mande um presente e peça" : "Peça") +
+                                   ` com ${d.prefixo}pedir <link, nome ou código>`) : null,
   ].filter(Boolean));
 }
 
@@ -1807,6 +1995,7 @@ label.check input { margin-top: 4px; }
 .novo { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
 .novo input[type=text] { flex: 1 1 140px; width: auto; }
 .novo input[type=file] { flex: 1 1 200px; min-width: 0; }
+.novo select, .som select { flex: 1 1 120px; width: auto; min-width: 0; }
 .barra { position: fixed; left: 0; right: 0; bottom: 0; background: var(--cartao); border-top: 1px solid var(--borda);
   padding: 12px 16px; display: flex; gap: 10px; align-items: center; justify-content: center; flex-wrap: wrap; }
 button { font: inherit; padding: 9px 18px; border-radius: 6px; border: 1px solid var(--borda); background: var(--fundo);
@@ -1915,6 +2104,24 @@ button.principal { background: var(--destaque); border-color: var(--destaque); c
   </section>
 
   <section>
+    <h2>Presentes</h2>
+    <p class="sub" style="margin:4px 0 0">Quando alguém manda um destes presentes na live, toca o som escolhido (um dos
+      sons acima). Numa sequência de presentes (combo), o som toca uma vez, no começo. O som do presente não espera o
+      tempo entre sons e toca mesmo com a caixinha do som desmarcada (ela vale só para o comando do chat). No mudo, e
+      para as pessoas silenciadas, não toca. Fica no config.json, em "presentes".</p>
+    <div id="lista_presentes"></div>
+    <label for="presente_nome">Novo presente<small>O nome do presente como aparece na janela do programa quando alguém
+      manda (ex.: Rose, GG, Finger Heart; maiúsculas e espaços tanto faz). Os que já chegaram nesta live aparecem como
+      sugestão ao clicar na caixa.</small></label>
+    <div class="novo">
+      <input type="text" id="presente_nome" list="presentes_vistos" placeholder="ex.: Rose" maxlength="40" autocomplete="off" spellcheck="false">
+      <datalist id="presentes_vistos"></datalist>
+      <select id="presente_som" aria-label="Som do novo presente"></select>
+      <button type="button" id="presente_adicionar">Adicionar</button>
+    </div>
+  </section>
+
+  <section>
     <h2>Pedidos de mapas</h2>
     <label for="pedidos_maximos">Tamanho máximo da fila de pedidos<small>Com a fila cheia, novos pedidos são recusados. No chat: !limitepedidos 20.</small></label>
     <input type="number" id="pedidos_maximos" min="1">
@@ -1922,6 +2129,11 @@ button.principal { background: var(--destaque); border-color: var(--destaque); c
     <input type="number" id="pedidos_por_pessoa" min="0">
     <label class="check"><input type="checkbox" id="fila_pedidos"><span>Usar fila de pedidos<small>Desligado: cada pedido vai direto
       para o seu chat do osu! (precisa do nome e da senha de IRC) e a voz não anuncia. No chat: !filapedidos.</small></span></label>
+    <label class="check"><input type="checkbox" id="pedir_com_presente"><span>Pedir só com presente<small>Cada presente
+      que a pessoa manda vale um pedido (numa sequência, cada presente conta). Quem pede sem ter mandado presente ouve
+      como fazer. Se o pedido sair da fila sem ser atendido (!cancelar, !remover, !zerarpedidos), a pessoa pode pedir de
+      novo. Os pedidos que cada um ainda pode fazer ficam guardados em pedidos_por_presente.json, mesmo fechando o
+      programa. Não vale para você e os mods. No chat: !pedidopresente.</small></span></label>
   </section>
 
   <section>
@@ -1999,12 +2211,54 @@ function mostrarSons(d) {
   }) : [el("small", "", "Nenhum som ainda.")]));
   $("sons_faltando").textContent = d.sons_faltando.length ? "Estes não tocam, porque o arquivo não está na pasta sons: " +
     d.sons_faltando.join("; ") + "." : "";
+  mostrarPresentes(d);
 }
 
-// tocar, apagar, adicionar, ligar/desligar ou mudar o volume de um som. Devolve true se deu certo.
-async function sons(pedido) {
+// caixa de escolher o som de um presente
+function escolhaDeSom(d, atual) {
+  const s = el("select");
+  if (!d.sons.length) s.add(new Option("(crie um som antes)", ""));
+  for (const x of d.sons) s.add(new Option(d.config.prefixo + x.nome, x.nome));
+  if (atual && !d.sons.some(x => x.nome === atual)) s.add(new Option(d.config.prefixo + atual + " (não existe)", atual));
+  if (atual) s.value = atual;
+  return s;
+}
+
+function mostrarPresentes(d) {
+  $("lista_presentes").replaceChildren(...(d.presentes.length ? d.presentes.map(x => {
+    const linha = el("div", x.existe ? "som" : "som desligado"), texto = el("span"), som = escolhaDeSom(d, x.som),
+          tocar = el("button", "", "Testar"), apagar = el("button", "", "Tirar");
+    tocar.type = apagar.type = "button";
+    texto.append(el("b", "", x.presente));
+    if (!x.existe) texto.append(el("small", "", "Esse som não existe mais: escolha outro."));
+    som.setAttribute("aria-label", "Som do presente " + x.presente);
+    som.onchange = async () => {
+      if (!await sons({acao: "salvar", presente: x.presente, som: som.value}, "/api/presentes")) som.value = x.som;
+    };
+    tocar.onclick = () => sons({acao: "tocar", presente: x.presente}, "/api/presentes");
+    apagar.onclick = () => confirm("O " + x.presente + " não vai mais tocar som. Tirar?") &&
+      sons({acao: "apagar", presente: x.presente}, "/api/presentes");
+    linha.append(texto, som, tocar, apagar);
+    return linha;
+  }) : [el("small", "", "Nenhum presente toca som ainda.")]));
+  const escolhido = $("presente_som").value;
+  $("presente_som").replaceWith(Object.assign(escolhaDeSom(d, ""), {id: "presente_som"}));
+  if (d.sons.some(x => x.nome === escolhido)) $("presente_som").value = escolhido;
+  $("presente_som").setAttribute("aria-label", "Som do novo presente");
+  $("presentes_vistos").replaceChildren(...d.presentes_vistos.map(p => new Option(p, p)));
+}
+
+async function adicionarPresente() {
+  const presente = $("presente_nome").value.trim();
+  if (!presente) return status("Escreva o nome do presente (ex.: Rose).", true);
+  if (await sons({acao: "salvar", presente, som: $("presente_som").value}, "/api/presentes")) $("presente_nome").value = "";
+}
+
+// tocar, apagar, adicionar, ligar/desligar ou mudar o volume de um som (ou mexer num presente,
+// com url = "/api/presentes"). Devolve true se deu certo.
+async function sons(pedido, url = "/api/sons") {
   try {
-    const r = await fetch("/api/sons", {method: "POST", headers: {"Content-Type": "application/json"},
+    const r = await fetch(url, {method: "POST", headers: {"Content-Type": "application/json"},
                                         body: JSON.stringify(pedido)});
     const d = await r.json();
     if (!r.ok) { status(d.erro || "Não deu certo.", true); return false; }
@@ -2160,6 +2414,8 @@ $("copiar_link").onclick = async () => {
 };
 $("salvar").onclick = salvar;
 $("som_adicionar").onclick = adicionarSom;
+$("presente_adicionar").onclick = adicionarPresente;
+$("presente_nome").onkeydown = e => { if (e.key === "Enter") adicionarPresente(); };
 $("recarregar").onclick = carregar;
 carregar();
 </script>
@@ -2212,6 +2468,7 @@ def modo_teste():
     print("MODO DE TESTE: sem live, o que você digitar aqui entra como mensagem do chat.\n"
           "  oi                -> mensagem sua (você é o dono: pode usar os comandos de moderação)\n"
           "  Fulano: oi        -> mensagem de outra pessoa, chamada Fulano\n"
+          "  #presente Rose    -> alguém manda o presente Rose (Fulano: #presente Rose também vale)\n"
           "  sair (ou Ctrl+C)  -> fecha\n"
           "Atenção: apelidos e pedidos ficam gravados de verdade (apelidos.txt e pedidos.txt).\n")
     falar("Modo de teste ligado.")
@@ -2227,6 +2484,9 @@ def modo_teste():
         m = re.match(r"(\w+):\s+(.+)", linha)  # "Fulano: oi" (links como https://... não entram aqui)
         nome, texto = (m.group(1), m.group(2)) if m else ("Você", linha)
         uid = nome.lower() if m else dono
+        if texto.lower().startswith("#presente "):
+            receber_presente(SimpleNamespace(unique_id=uid, nick_name=nome), texto[10:].strip(), None, False, 1, dono)
+            continue
         processar_comentario(SimpleNamespace(unique_id=uid, nick_name=nome), texto, dono)
 
 
@@ -2375,6 +2635,7 @@ def main():
     abrir_tosu()
     acertar_inicio()
     atexit.register(fechar_irc)  # sai do chat do osu! direitinho ao fechar
+    carregar_creditos()
     salvar_pedidos()  # a fila começa vazia: o pedidos.txt não pode continuar mostrando a da live anterior
     if usuario.lower() in ("teste", "--teste"):
         threading.Thread(target=narrador, daemon=True).start()
@@ -2416,6 +2677,13 @@ def main():
         if comentario_repetido_ou_antigo(event):
             return
         processar_comentario(event.user, event.comment or "", usuario)
+
+    @client.on(GiftEvent)
+    async def ao_ganhar_presente(event: GiftEvent):
+        if event.gift is None or event.user is None or comentario_repetido_ou_antigo(event):
+            return
+        receber_presente(event.user, event.gift.name or f"presente {event.gift.id}", event.gift.id,
+                         event.streaking, event.repeat_count or 1, usuario)
 
     print(f"Conectando a @{usuario}... (Ctrl+C para sair)")
     try:

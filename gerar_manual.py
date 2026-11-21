@@ -302,6 +302,17 @@ s.append(atencao(f"Depois de um som, os outros esperam <b>10 segundos</b> ({cmd(
                  "chat não virar uma mesa de som. Você e os mods não esperam. No !mudo, os sons não tocam. "
                  f"{cmd('!desligar zap')} desliga um som (e {cmd('!ligar zap')} liga de novo). Um som "
                  "com o nome de um comando do programa (como pedir) fica de fora."))
+s.append(p("Presentes", h2))
+s.append(p("Um presente da live pode tocar um dos sons: por exemplo, quando alguém manda uma <b>Rose</b>, toca o "
+           f"{cmd('!fah')}. Na parte <b>Presentes</b> da página, escreva o nome do presente, escolha o som e clique "
+           "em <b>Adicionar</b>. Ali também dá para trocar o som, testar e tirar. No config.json fica em "
+           "<b>presentes</b>, por exemplo <b>\"presentes\": {\"Rose\": \"fah\"}</b>."))
+s.append(dica("O nome do presente é o que aparece na janela do programa quando alguém manda um, como "
+              "<b>[presente Rose de Fulano]</b>. Os que já chegaram na live aparecem como sugestão na página. "
+              "Maiúsculas e espaços tanto faz."))
+s.append(atencao("Numa sequência de presentes (combo), o som toca uma vez, no começo. O som do presente não espera "
+                 "os 10 segundos entre sons e toca mesmo com o som desligado (o desligado vale só para o comando "
+                 "do chat). No !mudo, e para as pessoas silenciadas, não toca."))
 
 # ---------- 5 ----------
 s += [PageBreak(), p("5. Comandos de moderação", h1),
@@ -352,6 +363,7 @@ s.append(tabela(["Comando", "O que faz"], [
     [cmd("!porpessoa 2"), "Quantos pedidos cada pessoa pode ter na fila (0 = sem limite)."],
     [cmd("!filapedidos"), "Liga ou desliga a fila de pedidos. Desligada, cada pedido vai direto para o "
                           "seu chat do osu!, sem a voz anunciar (seção 6)."],
+    [cmd("!pedidopresente"), "Liga ou desliga o pedido por presente: cada presente vale um pedido (seção 6)."],
 ], [42, 128]))
 s.append(dica(f"Valores fora da faixa usam o limite mais próximo: {cmd('!volume 150')} vira volume 100. "
               f"O {cmd('!ligar')} e o {cmd('!desligar')} não podem ser desligados pelo chat, senão não "
@@ -447,6 +459,19 @@ s += itens([
     "(o LIVE Studio recusa <b>localhost</b>) e só abre a fila.",
     "A fila <b>zera</b> quando o programa é fechado.",
 ])
+s.append(p("Pedir só com presente", h2))
+s.append(p(f"Vem desligado. Com {cmd('!pedidopresente')} (você ou um moderador), a caixinha <b>Pedir só com "
+           "presente</b> da página ou <b>pedir_com_presente</b> no config.json, cada presente que a pessoa manda "
+           f"vale <b>um pedido</b>. Quem usa o {cmd('!pedir')} sem ter mandado presente ouve como fazer."))
+s += itens([
+    "Numa sequência, cada presente conta: 5 rosas valem 5 pedidos. O limite de pedidos por pessoa continua "
+    "valendo, então ela pede um, espera ser atendida e pede o próximo.",
+    f"Se o pedido sair da fila sem ser atendido ({cmd('!cancelar')}, {cmd('!remover')} ou {cmd('!zerarpedidos')}), "
+    "a pessoa pode pedir de novo.",
+    f"O {cmd('!pedidos')} fala quantos a pessoa ainda pode pedir. Isso fica guardado no arquivo "
+    "<b>pedidos_por_presente.json</b>, mesmo fechando o programa ou numa outra live.",
+    "Só contam os presentes que chegam com a opção ligada. Você e os moderadores pedem sem presente.",
+])
 s.append(p("Sem fila: pedidos direto no osu!", h2))
 s.append(p(f"Com {cmd('!filapedidos')} (você ou um moderador), a fila é desligada: cada {cmd('!pedir')} vai "
            "<b>na hora</b> para o seu chat do osu!, e a voz <b>não anuncia</b> os pedidos. Não tem limite de "
@@ -540,6 +565,7 @@ s.append(tabela(["Função", "Durante a live", "No config.json"], [
     ["Qualquer comando", f"{cmd('!desligar')} / {cmd('!ligar')}", '"comandos_desativados": ["copiar"]'],
     ["Aceitar pedidos", f"{cmd('!fecharpedidos')} / {cmd('!abrirpedidos')}", "—"],
     ["Fila de pedidos", cmd("!filapedidos"), '"fila_pedidos": true / false'],
+    ["Pedir só com presente", cmd("!pedidopresente"), '"pedir_com_presente": true / false'],
     ["Aviso de mapa novo", cmd("!avisos mapa"), '"avisar_mapa": true / false'],
     ["Aviso de recorde", cmd("!avisos recorde"), '"avisar_recorde": true / false'],
     ["Moderadores", f"{cmd('!mod')} / {cmd('!desmod')} (só você)", '"moderadores": ["usuario"]'],
@@ -674,6 +700,8 @@ s.append(opcoes([
              "(uma parte do volume geral: 100 = igual à voz), e se ele está ligado (true ou false). "
              "Ex.: <b>{\"zap\": {\"arquivo\": \"zap.mp3\", \"volume\": 40, \"ligado\": true}}</b>. "
              "Mais fácil pela página, em Sons."),
+    ("presentes", "Qual som toca quando alguém manda cada presente: o nome do presente e o som, sem o !. "
+                  "Ex.: <b>{\"Rose\": \"fah\"}</b>. Mais fácil pela página, em Presentes."),
     ("comandos_desativados", "Comandos desligados, sem o !. Eles passam a ser ignorados em silêncio "
                              "e saem do !comandos. Ex.: <b>[\"copiar\", \"top\"]</b>."),
 ]))
@@ -685,6 +713,8 @@ s.append(opcoes([
                            "Não vale para você e os moderadores."),
     ("fila_pedidos", "<b>true</b>: os pedidos entram na fila e você abre com o !proximo. <b>false</b>: cada "
                      "pedido vai direto para o seu chat do osu!, sem a voz anunciar."),
+    ("pedir_com_presente", "<b>true</b>: cada presente que a pessoa manda vale um !pedir. Não vale para você "
+                           "e os moderadores."),
     ("avisar_mapa", "<b>true</b>: a voz anuncia quando você começa a jogar um mapa novo."),
     ("avisar_recorde", "<b>true</b>: a voz anuncia quando você bate o recorde de PP da live."),
     ("tosu_url", "Endereço onde o app busca os dados do tosu: <b>http://127.0.0.1:24050/json/v2</b>. "

@@ -5,7 +5,7 @@ Uso:
     python gerar_zip.py v0.1.1
     (antes: gerar_exe.bat, gerar_manual.bat e gerar_licencas.py)
 
-O config.json, apelidos.txt, pedidos.txt e registros não vão no zip: são de quem usa,
+O config.json, apelidos.txt, pedidos.txt, pedidos_por_presente.json e registros não vão no zip: são de quem usa,
 e assim extrair uma versão nova por cima não apaga nada disso. Da pasta sons, só vão os
 arquivos dos sons padrão (SONS no leitor_chat.py); os que a pessoa acrescentou continuam lá.
 """
