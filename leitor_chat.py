@@ -24,7 +24,7 @@ Pedidos de mapas do osu! (a fila fica salva em pedidos.txt):
                          !abrirpedidos  !zerarpedidos  !limitepedidos <número>  !porpessoa <número>
                          !filapedidos (liga/desliga a fila: desligada, cada pedido vai direto para o osu!)
                          !pedidopresente (liga/desliga: cada presente vale um !pedir)
-    Atalho de teclado (ATALHO_PROXIMO, ex.: "ctrl+alt+n"): faz o mesmo que o !proximo sem sair do jogo.
+    Atalho de teclado (ATALHO_PROXIMO, vem no Ctrl+Alt+N): faz o mesmo que o !proximo sem sair do jogo.
 
 osu! (o tosu abre sozinho, se estiver na pasta tosu):  !np (mapa atual)  !pp  !rank  !recorde
     e avisos automáticos de mapa novo (AVISAR_MAPA) e de recorde de PP da live (AVISAR_RECORDE)
@@ -138,9 +138,9 @@ PEDIDOS_POR_PESSOA = 1  # quantos pedidos cada pessoa pode ter na fila ao mesmo 
 FILA_PEDIDOS = True     # False: cada !pedir vai direto para o seu chat do osu!, sem fila e sem a voz anunciar
 PEDIR_COM_PRESENTE = False  # True: cada presente que a pessoa manda vale um !pedir (você e os mods não precisam)
 COMANDOS_DESATIVADOS = []  # comandos desligados, sem o "!". ex.: ["copiar", "top"]
-# tecla que faz o mesmo que o !proximo, mesmo com o jogo na frente (só no Windows). "" desliga.
+# tecla que faz o mesmo que o !proximo, mesmo com o jogo na frente (só no Windows). Vem ligado no Ctrl+Alt+N; "" desliga.
 # ex.: "ctrl+alt+n", "ctrl+shift+p", "pause", "ctrl+num5". O jogo não recebe essa tecla: use uma que você não usa nele.
-ATALHO_PROXIMO = ""
+ATALHO_PROXIMO = "ctrl+alt+n"
 
 # osu! (precisa do tosu aberto junto com o jogo)
 TOSU_URL = "http://127.0.0.1:24050/json/v2"
@@ -2717,7 +2717,7 @@ button.principal { background: var(--destaque); border-color: var(--destaque); c
       novo. Os pedidos que cada um ainda pode fazer ficam guardados em pedidos_por_presente.json, mesmo fechando o
       programa. Não vale para você e os mods. No chat: !pedidopresente.</small></span></label>
     <label for="atalho_proximo">Atalho do próximo pedido<small>Uma tecla que faz o mesmo que o !proximo, mesmo com o
-      jogo na frente. Clique na caixa e aperte a tecla (ex.: Ctrl+Alt+N); Backspace apaga e desliga. O jogo não
+      jogo na frente. Vem no Ctrl+Alt+N. Para trocar, clique na caixa e aperte a tecla; Backspace apaga e desliga. O jogo não
       recebe essa tecla, então escolha uma que você não usa nele. Só no Windows.</small></label>
     <input type="text" id="atalho_proximo" placeholder="desligado" autocomplete="off" spellcheck="false" readonly>
   </section>

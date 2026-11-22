@@ -491,9 +491,9 @@ O chat pede mapas, eles entram numa fila e você abre um de cada vez.
   e a espera entre comandos continuam valendo. Precisa do chat do osu! configurado; se o envio falhar
   (ou o chat não estiver configurado), a voz avisa e o pedido fica guardado na fila, para sair com o
   `!proximo` (o navegador não abre sozinho no meio da partida).
-- **Atalho de teclado** (vem desligado; na parte **Pedidos de mapas** da página, clique na caixa
-  **Atalho do próximo pedido** e aperte a tecla, ou `"atalho_proximo": "ctrl+alt+n"` no config.json): a tecla faz o
-  mesmo que o `!proximo`, mesmo com o osu! na frente, sem sair do jogo. Vale tecla sozinha (`pause`) ou com
+- **Atalho de teclado** (vem ligado no **Ctrl+Alt+N**; para trocar, na parte **Pedidos de mapas** da página,
+  clique na caixa **Atalho do próximo pedido** e aperte a tecla, ou mude `"atalho_proximo"` no config.json): a
+  tecla faz o mesmo que o `!proximo`, mesmo com o osu! na frente, sem sair do jogo. Vale tecla sozinha (`pause`) ou com
   `ctrl`, `alt`, `shift` e `win` (`ctrl+alt+n`, `ctrl+shift+p`). O Windows entrega a tecla só para o
   programa, então o jogo não a recebe: escolha uma que você não usa nele. Se outro programa já usar a
   tecla, a janela avisa. Só no Windows.
@@ -514,7 +514,7 @@ O chat pede mapas, eles entram numa fila e você abre um de cada vez.
 | `pedidos_por_pessoa` | Quantos pedidos cada pessoa pode ter na fila ao mesmo tempo (`0` = sem limite) | `1` |
 | `fila_pedidos` | `false`: pedidos vão direto para o chat do osu!, sem fila e sem a voz anunciar | `true` |
 | `pedir_com_presente` | `true`: cada presente que a pessoa manda vale um `!pedir` | `false` |
-| `atalho_proximo` | Tecla que faz o mesmo que o `!proximo` sem sair do jogo (ex.: `"ctrl+alt+n"`, `"pause"`; `""` desliga) | `""` |
+| `atalho_proximo` | Tecla que faz o mesmo que o `!proximo` sem sair do jogo (ex.: `"ctrl+alt+n"`, `"pause"`; `""` desliga) | `"ctrl+alt+n"` |
 | Desligar tudo | `"comandos_desativados": ["pedir", "pedidos", "cancelar", "proximo", "remover", "fecharpedidos", "abrirpedidos", "zerarpedidos"]` | — |
 
 ---
