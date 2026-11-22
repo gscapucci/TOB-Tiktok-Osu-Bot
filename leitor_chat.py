@@ -48,6 +48,7 @@ import sys
 import threading
 import time
 import json
+import urllib.error
 import urllib.parse
 import urllib.request
 import webbrowser
@@ -81,6 +82,29 @@ TIKTOK_USUARIO = ""     # seu usuário do TikTok, sem @ (perguntado e guardado n
 #   "ko-KR-HyunsuMultilingualNeural"  masculina, Coreia, fala português com sotaque
 #   "windows"                         voz Maria do Windows (funciona offline)
 VOZ = "pt-BR-FranciscaNeural"
+# Servidor que gera a voz neural:
+#   "gratis"     Microsoft grátis, sem cadastro (usa a VOZ acima). Falha de vez em quando.
+#   "azure"      Microsoft Azure com a SUA chave: as mesmas vozes da VOZ acima, pelo serviço oficial
+#   "google"     Google Cloud Text-to-Speech com a SUA chave (voz em VOZ_GOOGLE)
+#   "elevenlabs" ElevenLabs com a SUA chave (voz em VOZ_ELEVENLABS)
+#   "openai"     OpenAI com a SUA chave (voz em VOZ_OPENAI)
+#   "piper"      Piper: grátis, roda no próprio PC, sem internet (voz em VOZ_PIPER). Leve.
+#   "kokoro"     Kokoro: grátis, roda no próprio PC, sem internet (voz em VOZ_KOKORO). Soa melhor que o
+#                Piper, mas precisa de um PC mais forte.
+# Os pagos cobram na conta de quem pôs a chave (todos têm uma cota grátis por mês). As vozes do Piper e do
+# Kokoro são baixadas na primeira vez que forem usadas (pasta "vozes", ao lado do programa).
+# Se o servidor falhar, a mensagem sai na voz do Windows, como sempre.
+SERVIDOR_VOZ = "gratis"
+VOZ_PIPER = "faber"     # faber, cadu ou jeff
+VOZ_KOKORO = "pf_dora"  # pf_dora (feminina), pm_alex ou pm_santa (masculinas)
+CHAVE_AZURE = ""
+REGIAO_AZURE = "brazilsouth"  # a região onde o recurso de Fala foi criado no portal da Azure
+CHAVE_GOOGLE = ""
+VOZ_GOOGLE = "pt-BR-Neural2-A"  # nomes em cloud.google.com/text-to-speech/docs/voices
+CHAVE_ELEVENLABS = ""
+VOZ_ELEVENLABS = "JBFqnCBsd6RMkjVDRZzb"  # o "Voice ID" da voz, na biblioteca de vozes do site
+CHAVE_OPENAI = ""
+VOZ_OPENAI = "nova"  # alloy, ash, coral, echo, fable, nova, onyx, sage ou shimmer
 VELOCIDADE = 1          # -10 (lento) a 10 (rápido)
 VOLUME = 100            # 0 a 100
 LER_NOME = True         # falar "Fulano disse: ..." antes da mensagem
@@ -144,11 +168,18 @@ PASTA_SONS = os.path.join(PASTA, "sons")  # onde ficam os arquivos dos SONS (a p
 
 # nome no config.json -> variável aqui do programa
 OPCOES = {nome.lower(): nome for nome in (
-    "TIKTOK_USUARIO", "VOZ", "VELOCIDADE", "VOLUME", "LER_NOME", "TAMANHO_MAXIMO", "FILA_MAXIMA", "PALAVRAS_BLOQUEADAS",
+    "TIKTOK_USUARIO", "VOZ", "SERVIDOR_VOZ", "CHAVE_AZURE", "REGIAO_AZURE", "CHAVE_GOOGLE", "VOZ_GOOGLE",
+    "CHAVE_ELEVENLABS", "VOZ_ELEVENLABS", "CHAVE_OPENAI", "VOZ_OPENAI", "VOZ_PIPER", "VOZ_KOKORO", "VELOCIDADE", "VOLUME", "LER_NOME", "TAMANHO_MAXIMO", "FILA_MAXIMA", "PALAVRAS_BLOQUEADAS",
     "USUARIOS_SILENCIADOS", "PREFIXO", "MODERADORES", "ESPERA_COMANDO", "ESPERA_SOM", "SONS", "PRESENTES", "PEDIDOS_MAXIMOS", "PEDIDOS_POR_PESSOA", "FILA_PEDIDOS", "PEDIR_COM_PRESENTE", "COMANDOS_DESATIVADOS",
     "TOSU_URL", "AVISAR_MAPA", "AVISAR_RECORDE", "OSU_USUARIO", "OSU_IRC_SENHA", "WEB_PORTA", "WEB_REDE_LOCAL", "ABRIR_PAGINA")}
 OPCOES_ANTIGAS = ("janela_pedidos",)  # opções de versões anteriores: ignoradas sem aviso
-SECRETAS = ("osu_irc_senha",)  # a página nunca mostra: só diz se tem uma salva e deixa trocar
+SECRETAS = ("osu_irc_senha", "chave_azure", "chave_google", "chave_elevenlabs", "chave_openai")  # a página nunca
+# mostra: só diz se tem uma salva e deixa trocar
+SERVIDORES_VOZ = {"gratis": "Microsoft grátis", "azure": "Azure", "google": "Google", "elevenlabs": "ElevenLabs",
+                  "openai": "OpenAI", "piper": "Piper", "kokoro": "Kokoro"}  # servidor -> nome falado
+DO_SERVIDOR = {"gratis": "da Microsoft", "azure": "da Azure", "google": "do Google", "elevenlabs": "da ElevenLabs",
+               "openai": "da OpenAI", "piper": "do Piper", "kokoro": "do Kokoro"}  # "a chave da Azure", "a voz do Google"
+VOZES_LOCAIS = {"piper": ("faber", "cadu", "jeff"), "kokoro": ("pf_dora", "pm_alex", "pm_santa")}
 LIMITES = {"VELOCIDADE": (-10, 10), "VOLUME": (0, 100), "TAMANHO_MAXIMO": (1, None), "FILA_MAXIMA": (1, None),
            "ESPERA_COMANDO": (0, None), "ESPERA_SOM": (0, None), "PEDIDOS_MAXIMOS": (1, None), "PEDIDOS_POR_PESSOA": (0, None), "WEB_PORTA": (0, 65535)}
 
@@ -175,6 +206,7 @@ def mudar_config(mudancas: dict) -> list:
         except OSError as e:
             avisos.append(f"mudei agora, mas não consegui gravar o config.json ({e}).")
     esquecer_silenciados()
+    adiantar_voz_local()
     for aviso in avisos:
         print(f"*** {aviso}")
     return avisos
@@ -210,6 +242,21 @@ def aplicar_config(config: dict) -> list:
         if nome == "PRESENTES":
             valor, avisos_presentes = conferir_presentes(valor)
             avisos += avisos_presentes
+        if nome == "SERVIDOR_VOZ":
+            valor = valor.strip().lower()
+            if valor not in SERVIDORES_VOZ:
+                avisos.append(f"\"{chave}\" vai de: {', '.join(SERVIDORES_VOZ)}. "
+                              f"Mantive: {json.dumps(atual, ensure_ascii=False)}")
+                continue
+        if nome.startswith(("CHAVE_", "REGIAO_", "VOZ_")):
+            valor = valor.strip()
+        if nome in ("VOZ_PIPER", "VOZ_KOKORO"):
+            valor = valor.lower()
+            opcoes = VOZES_LOCAIS[nome[4:].lower()]
+            if valor not in opcoes:
+                avisos.append(f"\"{chave}\" vai de: {', '.join(opcoes)}. "
+                              f"Mantive: {json.dumps(atual, ensure_ascii=False)}")
+                continue
         if nome == "PREFIXO" and not valor.strip():
             avisos.append(f"\"{chave}\" não pode ficar vazio. Mantive: {json.dumps(atual, ensure_ascii=False)}")
             continue
@@ -383,8 +430,254 @@ def voz_windows():
     return voz
 
 
-ESPERA_VOZ_NEURAL = 10  # segundos que uma fala pode levar para vir da internet antes de desistir (normal: 1 a 2)
+ESPERA_VOZ_NEURAL = 5   # segundos que cada tentativa de baixar uma fala pode levar (normal: 1 a 2)
+ESPERA_VOZ_PAGA = 10    # o mesmo, nos servidores pagos (alguns demoram um pouco mais para gerar)
+TENTATIVAS_VOZ_NEURAL = 3  # o serviço falha à toa de vez em quando: tenta isso tudo antes de ir para a do Windows
 PAUSA_VOZ_NEURAL = 60   # depois de uma falha, segundos sem tentar a voz neural (cada tentativa pode demorar)
+
+
+class ErroDeConta(Exception):
+    """O servidor pago recusou por causa da conta (chave errada, sem saldo, cota acabou): tentar de novo
+    não adianta, a pessoa precisa conferir a chave ou a conta."""
+
+
+def voz_em_uso() -> tuple:
+    """(servidor, voz) que vai ler a próxima fala. A Maria do Windows vale com as vozes da Microsoft."""
+    if SERVIDOR_VOZ in ("gratis", "azure"):
+        return ("windows", "") if VOZ == "windows" else (SERVIDOR_VOZ, VOZ)
+    return SERVIDOR_VOZ, {"google": VOZ_GOOGLE, "elevenlabs": VOZ_ELEVENLABS, "openai": VOZ_OPENAI,
+                          "piper": VOZ_PIPER, "kokoro": VOZ_KOKORO}[SERVIDOR_VOZ]
+
+
+# ---------------- Vozes que rodam no próprio PC (Piper e Kokoro) ----------------
+# As vozes são baixadas na primeira vez que alguém escolhe o servidor (não vão no zip: são grandes).
+# Enquanto baixa e carrega, as mensagens saem na voz do Windows.
+PASTA_VOZES = os.path.join(PASTA, "vozes")
+_PIPER_HF = "https://huggingface.co/rhasspy/piper-voices/resolve/main/pt/pt_BR"
+_KOKORO_GH = "https://github.com/thewh1teagle/kokoro-onnx/releases/download/model-files-v1.0"
+TAMANHO_VOZ_LOCAL = {"piper": "uns 60 MB", "kokoro": "uns 120 MB"}
+ESPERA_ABRIR_VOZ_LOCAL = 15  # segundos que a fala espera a voz já baixada abrir (normal: 2 a 5)
+
+
+class ErroVozLocal(Exception):
+    """A voz do PC não conseguiu baixar ou carregar: tentar de novo na hora não adianta."""
+
+
+class VozPreparando(Exception):
+    """A voz do PC ainda está baixando ou carregando: esta mensagem sai na voz do Windows."""
+
+
+class SemAudio(Exception):
+    """O texto não tinha nada para falar (só símbolos, por exemplo)."""
+
+
+def arquivos_voz_local(servidor: str, voz: str) -> dict:
+    """Arquivos que a voz precisa, na pasta vozes -> de onde baixar."""
+    if servidor == "piper":  # todas as vozes de pt-BR do Piper são CC0 (uso livre)
+        nome = f"pt_BR-{voz}-medium.onnx"
+        return {nome: f"{_PIPER_HF}/{voz}/medium/{nome}", nome + ".json": f"{_PIPER_HF}/{voz}/medium/{nome}.json"}
+    # o Kokoro tem todas as vozes num arquivo só (modelo Apache 2.0)
+    return {"kokoro-v1.0.int8.onnx": f"{_KOKORO_GH}/kokoro-v1.0.int8.onnx",
+            "voices-v1.0.bin": f"{_KOKORO_GH}/voices-v1.0.bin"}
+
+
+def baixar_arquivo(url: str, destino: str):
+    temporario = destino + ".baixando"
+    pedido = urllib.request.Request(url, headers={"User-Agent": "leitor-chat"})
+    try:
+        with urllib.request.urlopen(pedido, timeout=30) as r, open(temporario, "wb") as f:
+            while bloco := r.read(1 << 20):
+                f.write(bloco)
+        os.replace(temporario, destino)
+    except BaseException:
+        apagar_arquivo(temporario)
+        raise
+
+
+def dados_espeak_sem_acento(nome: str, origem: str) -> str:
+    """O eSpeak (que as duas usam para saber como se pronuncia cada palavra) não abre a pasta de dados
+    se o caminho tiver acento, e muita gente tem acento no nome do usuário do Windows (C:\\Users\\Usuário).
+    Dentro do .exe ele também não abre a pasta onde o .exe se desempacota (testado), e quando não abre
+    ele FECHA O PROGRAMA. Por isso os dados são sempre copiados, uma vez, para uma pasta só com letras
+    simples, e conferidos antes de usar."""
+    marca = f"{nome}-{os.path.getsize(os.path.join(origem, 'phontab'))}"  # muda quando a biblioteca muda
+    for base in (PASTA_VOZES, os.path.join(os.environ.get("ProgramData", ""), "LeitorChat"),
+                 os.path.join(os.environ.get("PUBLIC", r"C:\Users\Public"), "LeitorChat")):
+        if not base.isascii() or "~" in base or not os.path.isabs(base):
+            continue
+        destino = os.path.join(base, "espeak", marca)
+        if os.path.exists(os.path.join(destino, "phontab")):
+            return destino
+        try:
+            import shutil
+            shutil.copytree(origem, destino + ".copiando", dirs_exist_ok=True)
+            os.replace(destino + ".copiando", destino)
+            return destino
+        except OSError:
+            continue
+    raise ErroVozLocal("não achei uma pasta sem acento para os dados de pronúncia (eSpeak)")
+
+
+def carregar_voz_local(servidor: str, voz: str):
+    """Abre o modelo já baixado. Demora uns segundos, por isso é feito uma vez só."""
+    if servidor == "piper":
+        from piper import PiperVoice
+        from piper.voice import ESPEAK_DATA_DIR
+        return PiperVoice.load(os.path.join(PASTA_VOZES, f"pt_BR-{voz}-medium.onnx"),
+                               espeak_data_dir=dados_espeak_sem_acento("piper", str(ESPEAK_DATA_DIR)))
+    import espeakng_loader
+    from kokoro_onnx import EspeakConfig, Kokoro
+    return Kokoro(os.path.join(PASTA_VOZES, "kokoro-v1.0.int8.onnx"), os.path.join(PASTA_VOZES, "voices-v1.0.bin"),
+                  espeak_config=EspeakConfig(
+                      lib_path=espeakng_loader.get_library_path(),
+                      data_path=dados_espeak_sem_acento("kokoro", espeakng_loader.get_data_path())))
+
+
+trava_voz_local = threading.Lock()
+vozes_locais = {}      # (servidor, voz) -> (modelo carregado, trava para gerar uma fala de cada vez)
+preparando_local = set()
+erros_voz_local = {}   # (servidor, voz) -> o que deu errado ao preparar
+
+
+def chave_voz_local(servidor: str, voz: str) -> tuple:
+    return servidor, voz if servidor == "piper" else ""  # o Kokoro carrega todas as vozes juntas
+
+
+def preparar_voz_local(servidor: str, voz: str):
+    """Thread: baixa o que falta e carrega a voz."""
+    chave = chave_voz_local(servidor, voz)
+    nome = SERVIDORES_VOZ[servidor]
+    try:
+        arquivos = arquivos_voz_local(servidor, voz)
+        faltando = {a: u for a, u in arquivos.items() if not os.path.exists(os.path.join(PASTA_VOZES, a))}
+        if faltando:
+            print(f"[baixando a voz {voz} do {nome} ({TAMANHO_VOZ_LOCAL[servidor]}), só na primeira vez...]")
+            os.makedirs(PASTA_VOZES, exist_ok=True)
+            for arquivo, url in faltando.items():
+                baixar_arquivo(url, os.path.join(PASTA_VOZES, arquivo))
+        modelo = carregar_voz_local(servidor, voz)
+        with trava_voz_local:
+            vozes_locais[chave] = (modelo, threading.Lock())
+        print(f"[voz do {nome} pronta]")
+    except ImportError as e:
+        with trava_voz_local:
+            erros_voz_local[chave] = f"o {nome} não está instalado ({e}). Rode o instalar.bat."
+    except Exception as e:
+        with trava_voz_local:
+            erros_voz_local[chave] = f"não consegui preparar a voz do {nome} ({type(e).__name__}: {e})"
+    finally:
+        with trava_voz_local:
+            preparando_local.discard(chave)
+
+
+def voz_local(servidor: str, voz: str) -> tuple:
+    """A voz já carregada. Se ainda não está, começa a preparar e avisa com VozPreparando."""
+    chave = chave_voz_local(servidor, voz)
+    with trava_voz_local:
+        if chave in vozes_locais:
+            return vozes_locais[chave]
+        if chave in erros_voz_local:
+            raise ErroVozLocal(erros_voz_local.pop(chave))  # a próxima tentativa prepara de novo
+        if chave not in preparando_local:
+            preparando_local.add(chave)
+            threading.Thread(target=preparar_voz_local, args=(servidor, voz), daemon=True,
+                             name="preparar voz").start()
+    raise VozPreparando()
+
+
+def adiantar_voz_local():
+    """Com o Piper ou o Kokoro escolhido, já começa a baixar e abrir a voz, sem esperar a primeira mensagem."""
+    servidor, voz = voz_em_uso()
+    if servidor in VOZES_LOCAIS:
+        try:
+            voz_local(servidor, voz)
+        except (VozPreparando, ErroVozLocal):
+            pass
+
+
+def gerar_voz_local(servidor: str, voz: str, texto: str, velocidade: int, caminho: str):
+    """Gera a fala no próprio PC e grava um .wav."""
+    import wave
+    modelo, trava = voz_local(servidor, voz)
+    fator = max(0.5, min(2.0, 1 + velocidade / 10))
+    with trava:  # o eSpeak não aguenta duas falas ao mesmo tempo, e num PC fraco não ganharia nada
+        if servidor == "piper":
+            from piper import SynthesisConfig
+            with wave.open(caminho, "wb") as w:
+                modelo.synthesize_wav(texto, w, syn_config=SynthesisConfig(length_scale=1 / fator))
+            with wave.open(caminho) as w:
+                if not w.getnframes():
+                    raise SemAudio()
+            return
+        import numpy
+        amostras, taxa = modelo.create(texto, voice=voz, speed=fator, lang="pt-br")
+    if not len(amostras):
+        raise SemAudio()
+    with wave.open(caminho, "wb") as w:
+        w.setnchannels(1)
+        w.setsampwidth(2)
+        w.setframerate(taxa)
+        w.writeframes((numpy.clip(amostras, -1, 1) * 32767).astype("<i2").tobytes())
+
+
+def pedir_voz_paga(servidor: str, voz: str, texto: str, velocidade: int) -> bytes:
+    """Gera a fala num servidor pago, com a chave da pessoa. Devolve o mp3."""
+    from xml.sax.saxutils import escape, quoteattr
+    fator = 1 + velocidade / 10  # velocidade -10 a 10 -> 0 a 2 vezes a normal
+    chave = {"azure": CHAVE_AZURE, "google": CHAVE_GOOGLE, "elevenlabs": CHAVE_ELEVENLABS,
+             "openai": CHAVE_OPENAI}[servidor]
+    nome, do = SERVIDORES_VOZ[servidor], DO_SERVIDOR[servidor]
+    if not chave:
+        raise ErroDeConta(f"falta a chave {do} (na página, em Voz, ou \"chave_{servidor}\" no config.json)")
+    if not voz:
+        raise ErroDeConta(f"falta escolher a voz {do}")
+    if servidor == "azure":
+        idioma = "-".join(voz.split("-")[:2])
+        url = f"https://{REGIAO_AZURE or 'brazilsouth'}.tts.speech.microsoft.com/cognitiveservices/v1"
+        corpo = (f"<speak version='1.0' xml:lang={quoteattr(idioma)}><voice name={quoteattr(voz)}>"
+                 f"<prosody rate='{velocidade * 10:+d}%'>{escape(texto)}</prosody></voice></speak>").encode("utf-8")
+        cabecalhos = {"Ocp-Apim-Subscription-Key": chave, "Content-Type": "application/ssml+xml",
+                      "X-Microsoft-OutputFormat": "audio-24khz-48kbitrate-mono-mp3", "User-Agent": "leitor-chat"}
+    elif servidor == "google":
+        url = "https://texttospeech.googleapis.com/v1/text:synthesize?key=" + urllib.parse.quote(chave)
+        corpo = json.dumps({"input": {"text": texto},
+                            "voice": {"languageCode": "-".join(voz.split("-")[:2]), "name": voz},
+                            "audioConfig": {"audioEncoding": "MP3", "speakingRate": max(0.25, min(4.0, fator))}})
+        cabecalhos = {"Content-Type": "application/json"}
+    elif servidor == "elevenlabs":
+        url = (f"https://api.elevenlabs.io/v1/text-to-speech/{urllib.parse.quote(voz, safe='')}"
+               "?output_format=mp3_44100_128")
+        corpo = json.dumps({"text": texto, "model_id": "eleven_flash_v2_5", "language_code": "pt",
+                            "voice_settings": {"speed": max(0.7, min(1.2, 1 + velocidade * 0.03))}})
+        cabecalhos = {"xi-api-key": chave, "Content-Type": "application/json", "Accept": "audio/mpeg"}
+    else:  # openai
+        url = "https://api.openai.com/v1/audio/speech"
+        corpo = json.dumps({"model": "tts-1", "input": texto, "voice": voz, "response_format": "mp3",
+                            "speed": max(0.25, min(4.0, fator))})
+        cabecalhos = {"Authorization": "Bearer " + chave, "Content-Type": "application/json"}
+    if isinstance(corpo, str):
+        corpo = corpo.encode("utf-8")
+    pedido = urllib.request.Request(url, data=corpo, headers=cabecalhos, method="POST")
+    try:
+        with urllib.request.urlopen(pedido, timeout=ESPERA_VOZ_PAGA) as r:
+            dados = r.read()
+    except urllib.error.HTTPError as e:
+        try:
+            detalhe = " ".join(e.read(500).decode("utf-8", "replace").split())
+        except Exception:
+            detalhe = ""
+        if e.code in (401, 402, 403, 429) or (e.code == 400 and servidor == "google" and "API key" in detalhe):
+            motivo = {401: "chave errada", 402: "sem saldo", 403: "chave sem permissão ou região errada",
+                      429: "limite ou cota da conta acabou"}.get(e.code, "chave errada")
+            raise ErroDeConta(f"{nome} recusou ({motivo}). {detalhe[:200]}") from None
+        if 400 <= e.code < 500:  # pedido recusado: quase sempre a voz escolhida não existe
+            raise ErroDeConta(f"{nome} recusou o pedido (confira o nome da voz \"{voz}\"). {detalhe[:200]}") from None
+        raise  # erro do servidor (500...): passa, tenta de novo
+    if servidor == "google":
+        dados = base64.b64decode(json.loads(dados)["audioContent"])
+    if not dados:
+        raise OSError(f"{nome} não mandou áudio")
+    return dados
 
 
 def apagar_arquivo(caminho: str):
@@ -408,7 +701,7 @@ def narrador():
     from edge_tts.exceptions import NoAudioReceived
 
     pasta = tempfile.gettempdir()
-    for velho in glob.glob(os.path.join(pasta, "tiktok_fala*.mp3")):  # sobras de quando o programa fechou falando
+    for velho in glob.glob(os.path.join(pasta, "tiktok_fala*")):  # sobras de quando o programa fechou falando
         apagar_arquivo(velho)
     numeros = itertools.count()
     baixador = ThreadPoolExecutor(max_workers=2, thread_name_prefix="voz")
@@ -416,6 +709,7 @@ def narrador():
     sapi = None  # só criada se a voz do Windows for usada
     tentar_neural_em = 0.0  # até esta hora a voz neural falhou há pouco: usa a do Windows direto
     em_reserva = False      # já avisou que está na voz do Windows
+    avisou_baixando = set()  # vozes do PC que já avisou que estão sendo baixadas
 
     def falar_windows(frase: str):
         nonlocal sapi
@@ -425,18 +719,53 @@ def narrador():
         sapi.Volume = VOLUME
         sapi.Speak(frase)
 
-    def baixar(texto: str, voz: str, taxa: str) -> str:
+    def baixar(texto: str, servidor: str, voz: str, velocidade: int) -> str:
+        """O serviço grátis da Microsoft falha à toa em cerca de 1 a cada 10 pedidos (conexão recusada,
+        resposta vazia, pedido que trava), e na hora seguinte funciona. Por isso tenta algumas vezes antes
+        de desistir. Nos pagos também, menos quando o problema é a conta (aí tentar de novo não adianta).
+        As do PC (Piper e Kokoro) não dependem de rede, então não adianta tentar de novo."""
+        if servidor in VOZES_LOCAIS:
+            caminho = os.path.join(pasta, f"tiktok_fala_{next(numeros)}.wav")
+            try:
+                gerar_voz_local(servidor, voz, texto, velocidade, caminho)
+            except BaseException:
+                apagar_arquivo(caminho)
+                raise
+            return caminho
         caminho = os.path.join(pasta, f"tiktok_fala_{next(numeros)}.mp3")
-        try:
-            asyncio.run(asyncio.wait_for(edge_tts.Communicate(texto, voz, rate=taxa).save(caminho),
-                                         ESPERA_VOZ_NEURAL))
-        except BaseException:
-            apagar_arquivo(caminho)
-            raise
-        return caminho
+        for tentativa in range(1, TENTATIVAS_VOZ_NEURAL + 1):
+            try:
+                if servidor == "gratis":
+                    asyncio.run(asyncio.wait_for(
+                        edge_tts.Communicate(texto, voz, rate=f"{velocidade * 10:+d}%").save(caminho),
+                        ESPERA_VOZ_NEURAL))
+                else:
+                    with open(caminho, "wb") as f:
+                        f.write(pedir_voz_paga(servidor, voz, texto, velocidade))
+                return caminho
+            except BaseException as e:
+                apagar_arquivo(caminho)
+                sem_letras = isinstance(e, NoAudioReceived) and not any(c.isalnum() for c in texto)
+                if tentativa == TENTATIVAS_VOZ_NEURAL or sem_letras or isinstance(e, ErroDeConta) \
+                        or not isinstance(e, Exception):
+                    raise
+                time.sleep(0.3)
 
     def chave(texto: str) -> tuple:
-        return texto, VOZ, f"{VELOCIDADE * 10:+d}%"
+        return (texto, *voz_em_uso(), VELOCIDADE)
+
+    def conta_atual() -> tuple:
+        """Muda quando a pessoa troca o servidor, a voz, a chave ou a região: aí vale tentar de novo na hora."""
+        return voz_em_uso(), CHAVE_AZURE, REGIAO_AZURE, CHAVE_GOOGLE, CHAVE_ELEVENLABS, CHAVE_OPENAI
+
+    def usar_windows() -> bool:
+        nonlocal tentar_neural_em, ultima_conta
+        if conta_atual() != ultima_conta:
+            ultima_conta = conta_atual()
+            tentar_neural_em = 0.0
+        return voz_em_uso()[0] == "windows" or time.time() < tentar_neural_em
+
+    ultima_conta = conta_atual()
 
     def descartar(fala):
         """Fala baixada antes da hora que não vai mais ser usada (a voz mudou, ou o !limpar apagou a fila)."""
@@ -446,7 +775,7 @@ def narrador():
     def preparar_proxima():
         """Chamada enquanto uma fala toca: já baixa a próxima da fila. Uma resposta que chega no meio
         passa na frente, e é ela que passa a ser baixada."""
-        if VOZ == "windows" or time.time() < tentar_neural_em:
+        if usar_windows():
             return
         with tem_fala:
             proxima = fila_avisos[0] if fila_avisos else fila_chat[0][1] if fila_chat else None
@@ -462,15 +791,45 @@ def narrador():
             if isinstance(texto, tuple):  # ("som", arquivo, volume): um !ai, por exemplo
                 tocar_mp3(texto[1], preparar_proxima, texto[2])
                 continue
-            if VOZ == "windows" or time.time() < tentar_neural_em:
+            if usar_windows():
                 falar_windows(texto)
                 continue
+            servidor = DO_SERVIDOR[voz_em_uso()[0]]
             fala = preparadas.pop(chave(texto), None) or baixador.submit(baixar, *chave(texto))
             try:
                 caminho = fala.result()
-            except NoAudioReceived:
-                # o serviço respondeu, mas o texto não tem nada para falar (só símbolos, por exemplo)
-                print(f"[nada para falar em: {texto}]")
+            except VozPreparando:
+                # a voz do PC ainda está baixando ou abrindo. Só abrindo leva uns segundos: espera.
+                # Baixando pode levar minutos: esta sai na do Windows, a próxima tenta de novo.
+                atual = chave_voz_local(*voz_em_uso())
+                baixando = any(not os.path.exists(os.path.join(PASTA_VOZES, a))
+                               for a in arquivos_voz_local(*voz_em_uso()))
+                caminho = None
+                if not baixando:
+                    limite = time.time() + ESPERA_ABRIR_VOZ_LOCAL
+                    while caminho is None and time.time() < limite:
+                        time.sleep(0.2)
+                        try:
+                            caminho = baixar(*chave(texto))
+                        except VozPreparando:
+                            pass
+                        except Exception as erro:  # não abriu: esta sai na do Windows
+                            print(f"*** A voz {servidor} não funcionou: {erro}")
+                            break
+                if caminho is None:
+                    if baixando and atual not in avisou_baixando:
+                        avisou_baixando.add(atual)
+                        falar_windows(f"Estou baixando a voz {servidor}. Enquanto isso, vou usar a voz do Windows.")
+                    falar_windows(texto)
+                    continue
+            except (NoAudioReceived, SemAudio):
+                # mesmo depois das tentativas o serviço não mandou áudio: ou o texto só tem símbolos,
+                # ou o serviço não quis ler este texto. O resto do chat segue na voz de sempre.
+                if any(c.isalnum() for c in texto):
+                    print(f"[a voz {servidor} não leu, indo na do Windows: {texto}]")
+                    falar_windows(texto)
+                else:
+                    print(f"[nada para falar em: {texto}]")
                 continue
             except Exception as e:
                 # sem internet ou serviço fora do ar: a mensagem não se perde, sai na voz do Windows
@@ -480,14 +839,24 @@ def narrador():
                 preparadas.clear()
                 if not em_reserva:
                     em_reserva = True
-                    print(f"*** A voz da internet falhou ({type(e).__name__}: {e}). Usando a voz do Windows "
-                          f"e tentando de novo a cada {PAUSA_VOZ_NEURAL} segundos.")
-                    falar_windows("A voz da internet falhou. Vou usar a voz do Windows.")
+                    if isinstance(e, ErroVozLocal):
+                        print(f"*** A voz {servidor} não funcionou: {e}\n*** Usando a voz do Windows e "
+                              f"tentando de novo a cada {PAUSA_VOZ_NEURAL} segundos.")
+                        falar_windows(f"A voz {servidor} não funcionou. Vou usar a voz do Windows.")
+                    elif isinstance(e, ErroDeConta):
+                        print(f"*** A voz {servidor} não funcionou: {e}\n*** Usando a voz do Windows e "
+                              f"tentando de novo a cada {PAUSA_VOZ_NEURAL} segundos (ou assim que mudar a chave).")
+                        falar_windows(f"A voz {servidor} não funcionou. Confira a chave na página. "
+                                      "Vou usar a voz do Windows.")
+                    else:
+                        print(f"*** A voz {servidor} falhou ({type(e).__name__}: {e}). Usando a voz do "
+                              f"Windows e tentando de novo a cada {PAUSA_VOZ_NEURAL} segundos.")
+                        falar_windows("A voz da internet falhou. Vou usar a voz do Windows.")
                 falar_windows(texto)
                 continue
             if em_reserva:
                 em_reserva = False
-                print("[a voz da internet voltou]")
+                print(f"[a voz {servidor} voltou]")
             try:
                 tocar_mp3(caminho, preparar_proxima)
             finally:
@@ -997,7 +1366,8 @@ DESCRICAO_COMANDO = {
     "velocidade": "Muda a velocidade da voz, de -10 a 10.",
     "volume": "Muda o volume da voz, de 0 a 100.",
     "voz": "Troca a voz: francisca, thalita, antonio, raquel, duarte ou maria. Com sotaque de gringo: ava, emma, brian, william, "
-           "vivienne, remy, seraphina, florian, giuseppe ou hyunsu. Sem nome, fala a lista.",
+           "vivienne, remy, seraphina, florian, giuseppe ou hyunsu. No Piper: faber, cadu ou jeff. No Kokoro: dora, "
+           "alex ou santa. Sem nome, fala a lista.",
     "nomes": "Liga ou desliga o \"Fulano disse:\" antes das mensagens.",
     "bloquear": "Bloqueia uma palavra: mensagens com ela não são lidas em voz alta.",
     "desbloquear": "Desbloqueia uma palavra.",
@@ -1370,6 +1740,20 @@ def tratar_comando(user, nome: str, texto: str, dono: str) -> bool:
             falar(resposta.format(valor))
             return True
         if cmd == "voz":
+            if SERVIDOR_VOZ in VOZES_LOCAIS:
+                nomes = {v.split("_")[-1]: v for v in VOZES_LOCAIS[SERVIDOR_VOZ]}  # pf_dora -> dora
+                voz = nomes.get(arg.lower().strip())
+                if not voz:
+                    falar(f"Vozes do {SERVIDORES_VOZ[SERVIDOR_VOZ]}: {', '.join(n.title() for n in nomes)}. "
+                          "Use: exclamação voz e o nome.")
+                    return True
+                mudar_config({f"voz_{SERVIDOR_VOZ}": voz})
+                falar("Voz trocada.")
+                return True
+            if SERVIDOR_VOZ not in ("gratis", "azure"):
+                falar(f"Agora quem fala é a voz {DO_SERVIDOR[SERVIDOR_VOZ]}. "
+                      "Para trocar, use a página de configurações.")
+                return True
             voz = VOZES.get(arg.lower()) or next((v for v in VOZES.values() if v.lower() == arg.lower()), None)
             if not voz:
                 falar("Vozes: Francisca, Thalita, Antonio, Raquel, Duarte e Maria, que funciona sem internet. "
@@ -1675,6 +2059,7 @@ class PaginaConfig(http.server.BaseHTTPRequestHandler):
                           "existe": n in sons}
                          for n, s in SONS.items()],
                 "sons_faltando": faltando, "senha_salva": bool(OSU_IRC_SENHA.strip()),
+                "salvas": {k: bool(globals()[OPCOES[k]].strip()) for k in SECRETAS},
                 "presentes": [{"presente": p, "som": s, "existe": s in SONS} for p, s in PRESENTES.items()],
                 "presentes_vistos": [p for p in reversed(presentes_vistos) if not presente_configurado(p)]}
 
@@ -1811,7 +2196,7 @@ class PaginaConfig(http.server.BaseHTTPRequestHandler):
 
     def do_POST(self):
         # exigir JSON faz o navegador barrar envios vindos de outros sites
-        if not self.host_ok() or self.path not in ("/api/config", "/api/sons", "/api/presentes") or \
+        if not self.host_ok() or self.path not in ("/api/config", "/api/sons", "/api/presentes", "/api/testar_voz") or \
                 not (self.headers.get("Content-Type") or "").startswith("application/json"):
             return self.responder(403, "text/plain; charset=utf-8", b"acesso negado")
         try:
@@ -1827,6 +2212,12 @@ class PaginaConfig(http.server.BaseHTTPRequestHandler):
             return self.responder_json(*self.mexer_nos_sons(dados))
         if self.path == "/api/presentes":
             return self.responder_json(*self.mexer_nos_presentes(dados))
+        if self.path == "/api/testar_voz":
+            servidor, _ = voz_em_uso()
+            falar("Testando a voz. Um, dois, três.")
+            nome = "Maria do Windows" if servidor == "windows" else SERVIDORES_VOZ[servidor]
+            return self.responder_json({"mensagem": f"Testando a voz ({nome}). Se der erro, ele aparece na "
+                                                    "janela do programa e a voz avisa."})
         # senha em branco = continua a que já está salva (a página nunca recebe a senha para mandar de volta)
         dados = {k: v for k, v in dados.items()
                  if k.lower() not in SECRETAS or (isinstance(v, str) and v.strip())}
@@ -1957,6 +2348,7 @@ PAGINA = """<!doctype html>
   :root { --fundo: #16161a; --cartao: #212127; --texto: #ececf1; --suave: #9a9ca8; --borda: #36363e; --erro: #ef6c6c; }
 }
 * { box-sizing: border-box; }
+[hidden] { display: none !important; }
 body { margin: 0; font: 15px/1.45 system-ui, "Segoe UI", sans-serif; background: var(--fundo); color: var(--texto); }
 main { max-width: 720px; margin: 0 auto; padding: 16px 16px 110px; }
 h1 { font-size: 22px; margin: 8px 0 4px; }
@@ -2033,6 +2425,93 @@ button.principal { background: var(--destaque); border-color: var(--destaque); c
 
   <section>
     <h2>Voz</h2>
+    <label for="servidor_voz">Servidor da voz<small>Quem gera a voz. O grátis não precisa de nada, mas falha de vez em quando.
+      Nos outros você usa a sua conta e a sua chave, e a cobrança é com você (todos têm uma cota grátis por mês).
+      Se o servidor falhar, a mensagem sai na voz do Windows.</small></label>
+    <select id="servidor_voz">
+      <option value="gratis">Microsoft grátis (sem cadastro)</option>
+      <option value="piper">Piper (grátis, no seu PC, sem internet, leve)</option>
+      <option value="kokoro">Kokoro (grátis, no seu PC, sem internet, precisa de PC mais forte)</option>
+      <option value="azure">Microsoft Azure (sua chave, as mesmas vozes do grátis, mais estável)</option>
+      <option value="google">Google Cloud (sua chave)</option>
+      <option value="elevenlabs">ElevenLabs (sua chave)</option>
+      <option value="openai">OpenAI (sua chave)</option>
+    </select>
+
+    <div data-servidor="piper">
+      <label for="voz_piper">Voz do Piper<small>Roda no seu PC, então nunca dá erro de rede. Soa um pouco mais robótica que as
+        da internet. Na primeira vez a voz é baixada (uns 60 MB cada uma), e enquanto isso sai a voz do Windows. No chat: !voz cadu.</small></label>
+      <select id="voz_piper">
+        <option value="faber">Faber</option>
+        <option value="cadu">Cadu (masculina)</option>
+        <option value="jeff">Jeff (masculina)</option>
+      </select>
+    </div>
+    <div data-servidor="kokoro">
+      <label for="voz_kokoro">Voz do Kokoro<small>Roda no seu PC, então nunca dá erro de rede, e soa quase tão natural quanto as da
+        internet. Mas usa bastante o processador: em PC fraco, ou com o jogo pesado aberto, a voz pode atrasar. Na primeira vez
+        as vozes são baixadas (uns 120 MB), e enquanto isso sai a voz do Windows. No chat: !voz alex.</small></label>
+      <select id="voz_kokoro">
+        <option value="pf_dora">Dora (feminina)</option>
+        <option value="pm_alex">Alex (masculina)</option>
+        <option value="pm_santa">Santa (masculina)</option>
+      </select>
+    </div>
+    <div data-servidor="azure">
+      <label for="chave_azure">Chave da Azure<small>No portal.azure.com, crie um recurso de <b>Fala</b> (Speech) e copie a
+        "Chave 1" em Chaves e Ponto de Extremidade.</small></label>
+      <input type="password" id="chave_azure" autocomplete="new-password" spellcheck="false">
+      <small id="chave_azure_estado"></small>
+      <label for="regiao_azure">Região da Azure<small>A que aparece junto da chave, ex.: brazilsouth, eastus.</small></label>
+      <input type="text" id="regiao_azure" autocomplete="off" spellcheck="false">
+    </div>
+    <div data-servidor="google">
+      <label for="chave_google">Chave do Google Cloud<small>No console.cloud.google.com, ative a "Cloud Text-to-Speech API" e crie
+        uma chave de API em APIs e serviços &gt; Credenciais.</small></label>
+      <input type="password" id="chave_google" autocomplete="new-password" spellcheck="false">
+      <small id="chave_google_estado"></small>
+      <label for="voz_google">Voz do Google<small>O nome da voz, como na lista do Google (cloud.google.com/text-to-speech/docs/voices).
+        Pode escrever qualquer uma da lista.</small></label>
+      <input type="text" id="voz_google" list="vozes_google" autocomplete="off" spellcheck="false">
+      <datalist id="vozes_google">
+        <option value="pt-BR-Neural2-A">feminina</option>
+        <option value="pt-BR-Neural2-B">masculina</option>
+        <option value="pt-BR-Neural2-C">feminina</option>
+        <option value="pt-BR-Wavenet-A">feminina</option>
+        <option value="pt-BR-Wavenet-B">masculina</option>
+        <option value="pt-BR-Standard-A">feminina, mais barata</option>
+        <option value="pt-BR-Standard-B">masculina, mais barata</option>
+      </datalist>
+    </div>
+    <div data-servidor="elevenlabs">
+      <label for="chave_elevenlabs">Chave da ElevenLabs<small>No elevenlabs.io, em Developers &gt; API Keys.</small></label>
+      <input type="password" id="chave_elevenlabs" autocomplete="new-password" spellcheck="false">
+      <small id="chave_elevenlabs_estado"></small>
+      <label for="voz_elevenlabs">Voice ID da ElevenLabs<small>Na biblioteca de vozes do site, abra a voz e copie o "Voice ID".
+        Vale qualquer voz da sua conta, inclusive uma clonada.</small></label>
+      <input type="text" id="voz_elevenlabs" autocomplete="off" spellcheck="false">
+    </div>
+    <div data-servidor="openai">
+      <label for="chave_openai">Chave da OpenAI<small>No platform.openai.com, em API keys. A conta precisa ter crédito.</small></label>
+      <input type="password" id="chave_openai" autocomplete="new-password" spellcheck="false">
+      <small id="chave_openai_estado"></small>
+      <label for="voz_openai">Voz da OpenAI</label>
+      <select id="voz_openai">
+        <option value="nova">Nova (feminina)</option>
+        <option value="shimmer">Shimmer (feminina)</option>
+        <option value="coral">Coral (feminina)</option>
+        <option value="sage">Sage (feminina)</option>
+        <option value="alloy">Alloy (neutra)</option>
+        <option value="fable">Fable (neutra)</option>
+        <option value="echo">Echo (masculina)</option>
+        <option value="onyx">Onyx (masculina)</option>
+        <option value="ash">Ash (masculina)</option>
+      </select>
+    </div>
+    <small data-servidor="azure google elevenlabs openai">As chaves ficam só no config.json deste PC; a página nunca mostra
+      a chave salva. Deixe em branco para manter a atual.</small>
+
+    <div data-servidor="gratis azure">
     <label for="voz">Voz<small>Quem lê o chat. As neurais precisam de internet e soam mais naturais. No chat: !voz antonio.</small></label>
     <select id="voz">
       <option value="pt-BR-FranciscaNeural">Francisca (feminina)</option>
@@ -2052,6 +2531,9 @@ button.principal { background: var(--destaque); border-color: var(--destaque); c
       <option value="it-IT-GiuseppeMultilingualNeural">Giuseppe (masculina, Itália, sotaque de gringo)</option>
       <option value="ko-KR-HyunsuMultilingualNeural">Hyunsu (masculina, Coreia, sotaque de gringo)</option>
     </select>
+    </div>
+    <p style="margin:10px 0 0"><button type="button" id="testar_voz">Testar a voz</button>
+      <small style="display:inline">Fala uma frase com o que está salvo.</small></p>
     <label for="velocidade">Velocidade<small>De -10 (bem lenta) a 10 (bem rápida). No chat: !velocidade 5 ou !vel 5.</small></label>
     <div class="faixa"><input type="range" id="velocidade" min="-10" max="10" step="1"><output for="velocidade"></output></div>
     <label for="volume">Volume<small>Volume da voz, de 0 a 100. No chat: !volume 70 ou !vol 70.</small></label>
@@ -2148,7 +2630,7 @@ button.principal { background: var(--destaque); border-color: var(--destaque); c
     <label for="osu_irc_senha">Senha de IRC do osu!<small>Não é a senha da conta: é a de osu.ppy.sh &gt; Configurações &gt;
       Legacy API. Por segurança a página nunca mostra a senha salva; deixe em branco para manter a atual.</small></label>
     <input type="password" id="osu_irc_senha" autocomplete="new-password" spellcheck="false">
-    <small id="senha_estado"></small>
+    <small id="osu_irc_senha_estado"></small>
   </section>
 
   <section>
@@ -2170,6 +2652,18 @@ button.principal { background: var(--destaque); border-color: var(--destaque); c
 <script>
 const $ = id => document.getElementById(id);
 const LISTAS = ["palavras_bloqueadas", "usuarios_silenciados", "moderadores"];
+const SEGREDOS = ["osu_irc_senha", "chave_azure", "chave_google", "chave_elevenlabs", "chave_openai"];
+
+// mostra só os campos do servidor de voz escolhido
+function mostrarServidor() {
+  const s = $("servidor_voz").value;
+  document.querySelectorAll("[data-servidor]").forEach(e => e.hidden = !e.dataset.servidor.split(" ").includes(s));
+}
+
+async function testarVoz() {
+  if (Object.keys(mudancas(base)).length) return status("Salve antes de testar: o teste usa o que está salvo.", true);
+  await sons({}, "/api/testar_voz");
+}
 let comandos = [], apelidos = {}, chaves = [];
 let base = {};  // como a página estava quando recebeu os dados: o que difere disto é o que a pessoa mudou
 
@@ -2321,10 +2815,14 @@ function preencher(d) {
     return l;
   })]));
   mostrarSons(d);
-  $("osu_irc_senha").value = "";
-  $("osu_irc_senha").placeholder = d.senha_salva ? "•••••••• (salva)" : "";
-  $("senha_estado").textContent = d.senha_salva ? "Tem uma senha salva." : "Nenhuma senha salva ainda.";
+  for (const [k, salva] of Object.entries(d.salvas)) {
+    $(k).value = "";
+    $(k).placeholder = salva ? "•••••••• (salva)" : "";
+    const qual = k === "osu_irc_senha" ? "senha" : "chave";
+    $(k + "_estado").textContent = salva ? "Tem uma " + qual + " salva." : "Nenhuma " + qual + " salva ainda.";
+  }
   atualizarFaixas();
+  mostrarServidor();
   base = coletar();
 }
 
@@ -2338,8 +2836,10 @@ function coletar() {
     else if (el.type === "number" || el.type === "range") c[k] = Number(el.value);
     else c[k] = el.value;
   }
-  const senha = $("osu_irc_senha").value.trim();
-  if (senha) c.osu_irc_senha = senha;
+  for (const k of SEGREDOS) {
+    const valor = $(k).value.trim();
+    if (valor) c[k] = valor;
+  }
   c.comandos_desativados = [...document.querySelectorAll("#cmds input")].filter(i => !i.checked).map(i => i.value);
   return c;
 }
@@ -2413,6 +2913,8 @@ $("copiar_link").onclick = async () => {
   }
 };
 $("salvar").onclick = salvar;
+$("servidor_voz").onchange = mostrarServidor;
+$("testar_voz").onclick = testarVoz;
 $("som_adicionar").onclick = adicionarSom;
 $("presente_adicionar").onclick = adicionarPresente;
 $("presente_nome").onkeydown = e => { if (e.key === "Enter") adicionarPresente(); };
@@ -2637,6 +3139,7 @@ def main():
     atexit.register(fechar_irc)  # sai do chat do osu! direitinho ao fechar
     carregar_creditos()
     salvar_pedidos()  # a fila começa vazia: o pedidos.txt não pode continuar mostrando a da live anterior
+    adiantar_voz_local()
     if usuario.lower() in ("teste", "--teste"):
         threading.Thread(target=narrador, daemon=True).start()
         threading.Thread(target=vigia_osu, daemon=True).start()

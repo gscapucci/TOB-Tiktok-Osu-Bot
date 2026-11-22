@@ -7,7 +7,7 @@ if errorlevel 1 (
     exit /b 1
 )
 echo Gerando o LeitorChat.exe, isso leva um ou dois minutos...
-"%PY%" -m PyInstaller --noconfirm --onefile --console --name LeitorChat --collect-all TikTokLive --collect-all edge_tts --hidden-import comtypes.client --workpath build --specpath build --distpath dist leitor_chat.py
+"%PY%" -m PyInstaller --noconfirm --onefile --console --name LeitorChat --collect-all TikTokLive --collect-all edge_tts --hidden-import comtypes.client --collect-data piper --collect-binaries piper --collect-all espeakng_loader --collect-data kokoro_onnx --collect-data phonemizer --workpath build --specpath build --distpath dist leitor_chat.py
 if errorlevel 1 (
     echo.
     echo *** Deu erro ao gerar o exe.

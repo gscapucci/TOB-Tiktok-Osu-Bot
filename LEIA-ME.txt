@@ -62,6 +62,7 @@ COMANDOS DO CHAT
   !voz <nome>            troca a voz: francisca, thalita, antonio, raquel, duarte ou maria
                          com sotaque de gringo: ava, emma, brian, william, vivienne,
                          remy, seraphina, florian, giuseppe ou hyunsu
+                         no Piper: faber, cadu ou jeff; no Kokoro: dora, alex ou santa
   !velocidade <-10 a 10> velocidade da voz (!vel)
   !volume <0 a 100>      volume da voz (!vol)
   !nomes                 liga/desliga o "Fulano disse:" antes das mensagens
@@ -113,6 +114,23 @@ CONFIGURAÇÕES
                          ou "windows" (funciona sem internet). Também há vozes de outros
                          países com sotaque, como "en-US-AvaMultilingualNeural" e
                          "it-IT-GiuseppeMultilingualNeural" (lista na página de configurações)
+  servidor_voz           quem gera a voz:
+                           "gratis"     Microsoft grátis, sem cadastro (o padrão; usa a "voz" acima)
+                           "piper"      grátis, roda no seu PC, sem internet. Leve, um pouco robótica
+                           "kokoro"     grátis, roda no seu PC, sem internet. Mais natural, mas
+                                        precisa de um PC mais forte
+                           "azure"      Microsoft Azure com a SUA chave: as mesmas vozes do grátis,
+                                        sem as falhas
+                           "google", "elevenlabs", "openai"   com a SUA chave
+                         Piper e Kokoro baixam a voz na primeira vez (pasta vozes, 60 a 120 MB).
+                         Nos com chave, a cobrança é na sua conta (todos têm cota grátis por mês).
+                         Mais fácil pela página, que explica onde pegar cada chave e tem o
+                         botão "Testar a voz". Se o servidor falhar, sai a voz do Windows.
+  voz_piper              voz do Piper: "faber", "cadu" ou "jeff"
+  voz_kokoro             voz do Kokoro: "pf_dora" (feminina), "pm_alex" ou "pm_santa"
+  chave_azure, regiao_azure, chave_google, voz_google, chave_elevenlabs, voz_elevenlabs,
+  chave_openai, voz_openai
+                         a chave e a voz de cada servidor pago (a página nunca mostra as chaves)
   velocidade             velocidade da voz, de -10 (lenta) a 10 (rápida)
   volume                 volume da voz, de 0 a 100
   ler_nome               true: fala "Fulano disse: ..." antes da mensagem; false: só a mensagem
@@ -177,6 +195,7 @@ ARQUIVOS
                 as de mais de 7 dias são apagadas sozinhas ao abrir o programa:
                 copie para outra pasta a que quiser guardar
   apelidos.txt  apelidos que a voz usa
+  vozes\        as vozes do Piper e do Kokoro, se você usar (baixadas na primeira vez)
   sons\         os arquivos dos sons (qual comando toca cada um fica no config.json)
   pedidos.txt   fila de pedidos de mapas. Para mostrar na live com fundo transparente
                 (só na primeira vez): no topo da página de configurações, clique em

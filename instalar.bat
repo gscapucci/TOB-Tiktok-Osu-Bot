@@ -22,10 +22,14 @@ echo.
 
 :bibliotecas
 rem só confere se as bibliotecas existem, sem carregar (bem mais rápido que importar)
-"%PY%" -c "import importlib.util as u, sys; sys.exit(any(u.find_spec(m) is None for m in ['TikTokLive', 'edge_tts', 'comtypes', 'PyInstaller', 'reportlab', 'packaging']))" >nul 2>&1
+"%PY%" -c "import importlib.util as u, sys; sys.exit(any(u.find_spec(m) is None for m in ['TikTokLive', 'edge_tts', 'comtypes', 'piper', 'kokoro_onnx', 'onnxruntime', 'phonemizer', 'espeakng_loader', 'PyInstaller', 'reportlab', 'packaging']))" >nul 2>&1
 if not errorlevel 1 goto tosu
 echo Instalando as bibliotecas necessárias. Só acontece na primeira vez...
 "%PY%" -m pip install --disable-pip-version-check -r requirements.txt
+if errorlevel 1 goto erro_pip
+rem o kokoro-onnx diz que só aceita Python até o 3.13, mas funciona no 3.14: instala sem essa conferência
+rem (as dependências dele já vieram do requirements.txt)
+"%PY%" -m pip install --disable-pip-version-check --no-deps --ignore-requires-python kokoro-onnx==0.6.1
 if errorlevel 1 goto erro_pip
 echo Bibliotecas instaladas.
 echo.

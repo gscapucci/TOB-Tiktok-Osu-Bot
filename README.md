@@ -165,10 +165,46 @@ Tratamentos automáticos:
 - Respostas de comandos e avisos passam na frente das mensagens do chat
 - Mensagens com palavras bloqueadas não são lidas; se a palavra estiver no nome da pessoa, a voz fala "Alguém" no lugar do nome
 - Pessoas silenciadas não são lidas
-- Se a voz da internet falhar, a voz avisa uma vez e a mensagem sai na voz do Windows; a da internet é tentada de novo a cada minuto
+- Se a voz da internet falhar várias vezes seguidas, a voz avisa uma vez e a mensagem sai na voz do Windows; a da internet é tentada de novo a cada minuto
+
+### Servidor da voz
+
+Quem gera a voz neural. Escolha na página (seção **Voz**) ou em `servidor_voz` no `config.json`.
+O botão **Testar a voz** da página fala uma frase com o que está salvo.
+
+| Servidor | Precisa de | Vozes |
+|---|---|---|
+| `"gratis"` (padrão) | Nada | As da lista de `voz` (Francisca, Antonio...). Falha de vez em quando: o programa tenta de novo sozinho. |
+| `"piper"` | Nada (roda no seu PC, sem internet) | `faber`, `cadu` ou `jeff`, em `voz_piper`. Leve, mas um pouco robótica. |
+| `"kokoro"` | Nada (roda no seu PC, sem internet) | `pf_dora` (feminina), `pm_alex` ou `pm_santa` (masculinas), em `voz_kokoro`. Soa quase tão natural quanto as da internet, mas usa bastante o processador. |
+| `"azure"` | Conta e chave da Microsoft Azure (recurso de **Fala**/Speech) | As mesmas do grátis, pelo serviço oficial, que não fica falhando |
+| `"google"` | Chave do Google Cloud com a "Cloud Text-to-Speech API" ativada | Qualquer uma da [lista do Google](https://cloud.google.com/text-to-speech/docs/voices), em `voz_google` |
+| `"elevenlabs"` | Chave da ElevenLabs | Qualquer voz da conta (até clonada), pelo Voice ID, em `voz_elevenlabs` |
+| `"openai"` | Chave da OpenAI, com crédito | `nova`, `shimmer`, `coral`, `sage`, `alloy`, `fable`, `echo`, `onyx` ou `ash`, em `voz_openai` |
+
+O **Piper** e o **Kokoro** rodam no próprio PC: nunca dão erro de rede e não custam nada. Na primeira
+vez que forem escolhidos, a voz é baixada para a pasta `vozes`, ao lado do programa (Piper: uns 60 MB
+por voz; Kokoro: uns 120 MB, com todas as vozes). Enquanto baixa, as mensagens saem na voz do Windows.
+O Kokoro precisa de um PC razoável: num processador antigo (testado num AMD FX-8350), ele gera a fala
+mais ou menos na mesma velocidade em que ela é falada, então com o jogo pesado aberto a voz pode atrasar.
+O Piper é bem mais leve (gera a fala umas 6 vezes mais rápido do que ela é falada).
+
+Nos pagos, cada um usa a **própria conta**: a cobrança é na conta dona da chave, e todos têm uma cota grátis
+por mês. As chaves ficam só no `config.json` deste PC, e a página nunca mostra a chave salva. Se a chave
+estiver errada ou o saldo acabar, a voz avisa ("Confira a chave na página"), a janela mostra o motivo e
+as mensagens saem na voz do Windows até a chave ser trocada. Com o Google, ElevenLabs ou OpenAI, o `!voz`
+do chat não troca a voz: ela se escolhe na página. Com o Piper e o Kokoro, o `!voz` troca entre as
+vozes deles (`!voz cadu`, `!voz alex`).
 
 | Configuração | O que faz | Padrão |
 |---|---|---|
+| `servidor_voz` | `"gratis"`, `"piper"`, `"kokoro"`, `"azure"`, `"google"`, `"elevenlabs"` ou `"openai"` | `"gratis"` |
+| `voz_piper` | `"faber"`, `"cadu"` ou `"jeff"` | `"faber"` |
+| `voz_kokoro` | `"pf_dora"`, `"pm_alex"` ou `"pm_santa"` | `"pf_dora"` |
+| `chave_azure` / `regiao_azure` | Chave e região do recurso de Fala da Azure (a região aparece junto da chave, ex.: `"brazilsouth"`) | `""` / `"brazilsouth"` |
+| `chave_google` / `voz_google` | Chave de API do Google Cloud e o nome da voz | `""` / `"pt-BR-Neural2-A"` |
+| `chave_elevenlabs` / `voz_elevenlabs` | Chave da ElevenLabs e o Voice ID | `""` / `"JBFqnCBsd6RMkjVDRZzb"` |
+| `chave_openai` / `voz_openai` | Chave da OpenAI e a voz | `""` / `"nova"` |
 | `voz` | Qual voz usar: `"pt-BR-FranciscaNeural"` (feminina), `"pt-BR-ThalitaMultilingualNeural"` (feminina), `"pt-BR-AntonioNeural"` (masculina), `"pt-PT-RaquelNeural"` (Portugal, feminina), `"pt-PT-DuarteNeural"` (Portugal, masculina) ou `"windows"` (voz do Windows, funciona sem internet). Também há vozes de outros países que falam português com sotaque: `"en-US-AvaMultilingualNeural"`, `"en-US-EmmaMultilingualNeural"`, `"en-US-BrianMultilingualNeural"`, `"en-AU-WilliamMultilingualNeural"`, `"fr-FR-VivienneMultilingualNeural"`, `"fr-FR-RemyMultilingualNeural"`, `"de-DE-SeraphinaMultilingualNeural"`, `"de-DE-FlorianMultilingualNeural"`, `"it-IT-GiuseppeMultilingualNeural"` e `"ko-KR-HyunsuMultilingualNeural"`. | `"pt-BR-FranciscaNeural"` |
 | `velocidade` | De `-10` (lento) a `10` (rápido) | `1` |
 | `volume` | De `0` a `100` | `100` |
@@ -346,7 +382,7 @@ live e valem até fechar o programa.
 | `!limpar` | Apaga as mensagens que estavam esperando para serem lidas | — |
 | `!apelido fulano Aninha` | A voz passa a chamar o usuário `fulano` de Aninha. "Beleza, agora vou chamar fulano de Aninha." | `apelidos.txt` |
 | `!copiar texto` | Copia o texto para o seu **Ctrl+C**. "Copiei a mensagem de Fulano." É só de você e dos mods, para ninguém trocar o que você copiou. | — |
-| `!voz antonio` | Troca a voz: `francisca`, `thalita`, `antonio`, `raquel`, `duarte` ou `maria` (do Windows, sem internet). Com sotaque de gringo: `ava`, `emma`, `brian`, `william`, `vivienne`, `remy`, `seraphina`, `florian`, `giuseppe` ou `hyunsu`. Sem nome, fala a lista. | `voz` |
+| `!voz antonio` | Troca a voz: `francisca`, `thalita`, `antonio`, `raquel`, `duarte` ou `maria` (do Windows, sem internet). Com sotaque de gringo: `ava`, `emma`, `brian`, `william`, `vivienne`, `remy`, `seraphina`, `florian`, `giuseppe` ou `hyunsu`. No Piper: `faber`, `cadu` ou `jeff`; no Kokoro: `dora`, `alex` ou `santa`. Sem nome, fala a lista. | `voz` |
 | `!velocidade 5` | Muda a velocidade da voz (-10 a 10) | `velocidade` |
 | `!volume 70` | Muda o volume (0 a 100) | `volume` |
 | `!nomes` | Liga/desliga o "Fulano disse:" | `ler_nome` |
@@ -573,7 +609,8 @@ configurações. Os comandos de chat que mudam uma configuração gravam no
 | "Não achei a live de @fulano" | O usuário pode estar errado: troque na página de configurações (ou `tiktok_usuario` no `config.json`) e abra o programa de novo. Quem nunca fez live também vê essa mensagem até começar a primeira. |
 | O Windows diz "O Windows protegeu o computador" | Clique em **Mais informações → Executar assim mesmo** (acontece porque o programa não tem assinatura digital). |
 | A voz não fala nada | Veja se alguém usou `!mudo` e se apareceu algum erro de voz na janela. Sem internet, o programa já passa sozinho para a voz do Windows. |
-| A voz mudou para a do Windows sozinha | A voz da internet falhou (conexão ou serviço fora do ar). O programa tenta de novo a cada minuto e volta sozinho. |
+| A voz mudou para a do Windows sozinha | A voz da internet falhou (conexão ou serviço fora do ar). O programa tenta de novo a cada minuto e volta sozinho. Se acontece muito com o servidor grátis, dá para usar um pago com a sua chave (veja [Servidor da voz](#servidor-da-voz)). |
+| "A voz da Azure (ou do Google, ElevenLabs, OpenAI) não funcionou" | A janela mostra o motivo: chave errada, região errada (Azure), sem saldo ou cota acabou, ou nome da voz errado. Corrija na página e use **Testar a voz**. |
 | `!np`/`!pp`/`!rank` respondem "Não consegui ver o osu agora" | Veja se a janela do tosu está aberta (se não, abra o `tosu\tosu.exe`) e confira em http://127.0.0.1:24050 |
 | Aparece "tosu não encontrado na pasta tosu" | Falta o `tosu.exe` dentro da pasta `tosu`, ao lado do programa. Extraia o zip de novo (ou rode o `instalar.bat`). O chat funciona; só os comandos do osu! não respondem. |
 | Aparece "o relógio do computador está X minutos adiantado" (ou atrasado) | O programa já usa a hora da internet e funciona normal. Para acertar o Windows: Configurações → Hora e idioma → Data e hora → **Sincronizar agora**. |

@@ -27,3 +27,6 @@ tosu/
 
 # Configurações de quem usa (o programa cria na primeira vez; os padrões ficam no leitor_chat.py)
 config.json
+
+# Vozes do Piper e do Kokoro (o programa baixa na primeira vez que forem usadas)
+vozes/

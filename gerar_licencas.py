@@ -16,7 +16,7 @@ from packaging.requirements import Requirement
 
 PASTA = os.path.dirname(os.path.abspath(__file__))
 SAIDA = os.path.join(PASTA, "dist", "licencas")
-RAIZES = ["TikTokLive", "edge-tts", "comtypes"]  # o que o leitor_chat.py importa (veja requirements.txt)
+RAIZES = ["TikTokLive", "edge-tts", "comtypes", "piper-tts", "kokoro-onnx"]  # o que o leitor_chat.py importa (veja requirements.txt)
 REPOSITORIO = "https://github.com/gscapucci/TOB-Tiktok-Osu-Bot"
 
 # pacotes cuja licença precisa de explicação
@@ -26,6 +26,11 @@ OBSERVACOES = {
     "tiktokliveproto": "Mesma licença e mesma exceção do TikTokLive.",
     "edge-tts": "LGPL-3.0. O código do Leitor de Chat é aberto e o gerar_exe.bat gera o .exe de novo, "
                 "então dá para trocar o edge-tts por outra versão.",
+    "piper-tts": "GPL-3.0. Traz o eSpeak NG (GPL-3.0), que diz como se pronuncia cada palavra. O código do "
+                 "Leitor de Chat é aberto e o gerar_exe.bat gera o .exe de novo, como a GPL pede.",
+    "phonemizer": "GPL-3.0. Usado pelo Kokoro para a pronúncia. Mesma situação do piper-tts.",
+    "espeakng-loader": "MIT, mas traz o eSpeak NG (GPL-3.0) já compilado: https://github.com/espeak-ng/espeak-ng",
+    "kokoro-onnx": "MIT (o pacote não declara, mas traz o texto da licença).",
     "eulerapisdk": "Não declara licença (nem no pacote, nem no PyPI). É o cliente da API da Euler Stream, "
                    "dependência obrigatória do TikTokLive.",
 }
@@ -35,6 +40,8 @@ LICENCAS_NO_GITHUB = {
     "betterproto2": "https://raw.githubusercontent.com/betterproto/python-betterproto2/main/LICENSE.md",
     "ffmpy": "https://raw.githubusercontent.com/Ch00k/ffmpy/master/LICENSE",
     "protobuf3-to-dict": "https://raw.githubusercontent.com/kaporzhu/protobuf-to-dict/master/LICENSE",
+    "espeakng-loader": "https://raw.githubusercontent.com/thewh1teagle/espeakng-loader/main/LICENSE",
+    "flatbuffers": "https://raw.githubusercontent.com/google/flatbuffers/master/LICENSE",
 }
 
 
@@ -132,6 +139,15 @@ def main():
                    "Incluído sem modificações, na pasta tosu." +
                    ("" if versao_tosu else " Versão desconhecida: confira em github.com/tosuapp/tosu/releases.")))
 
+    # vozes do Piper e do Kokoro: não vão no zip, o programa baixa na primeira vez que forem usadas
+    linhas.append(("Vozes pt-BR do Piper (faber, cadu, jeff)", "medium", "CC0-1.0",
+                   "https://huggingface.co/rhasspy/piper-voices/tree/main/pt/pt_BR", "(domínio público)",
+                   "Não vão no zip: são baixadas na primeira vez que forem usadas."))
+    linhas.append(("Modelo Kokoro-82M", "v1.0 (int8)", "Apache-2.0", "https://huggingface.co/hexgrad/Kokoro-82M",
+                   "https://www.apache.org/licenses/LICENSE-2.0.txt",
+                   "Não vai no zip: é baixado na primeira vez que for usado (arquivos de "
+                   "github.com/thewh1teagle/kokoro-onnx/releases/tag/model-files-v1.0)."))
+
     # a LGPL-3.0 (tosu, edge-tts) é escrita como acréscimo à GPL-3.0 e pede o texto das duas
     baixar("https://www.gnu.org/licenses/gpl-3.0.txt", os.path.join(SAIDA, "GPL-3.0.txt"))
 
@@ -141,7 +157,10 @@ def main():
                 f"Código-fonte: {REPOSITORIO}\n\n"
                 "Junto com ele vão programas e bibliotecas de outros autores, cada um com a sua licença.\n"
                 "Os textos das licenças estão nas subpastas desta pasta. A LGPL-3.0 complementa a\n"
-                "GPL-3.0, cujo texto está em GPL-3.0.txt.\n\n")
+                "GPL-3.0, cujo texto está em GPL-3.0.txt.\n\n"
+                "Como o .exe leva bibliotecas GPL-3.0 (piper-tts, phonemizer e o eSpeak NG), o .exe como um\n"
+                "todo segue a GPL-3.0: o código-fonte completo está no repositório acima e o gerar_exe.bat\n"
+                "gera o .exe a partir dele. O código do próprio Leitor de Chat continua sob a MIT.\n\n")
         for nome, versao, licenca, fonte, pasta, obs in linhas:
             f.write(f"{nome} {versao}\n  Licença: {licenca}\n  Código-fonte: {fonte}\n  Texto da licença: {pasta}\n")
             if obs:

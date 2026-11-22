@@ -240,6 +240,21 @@ s += itens([
     "Se o chat estiver rápido demais, a voz pula as mensagens mais antigas para não ficar atrasada.",
 ])
 
+s.append(p("Servidor da voz", h2))
+s.append(p("Na página de configurações, em <b>Voz</b>, você escolhe quem gera a voz. O botão <b>Testar a voz</b> "
+           "fala uma frase com o que está salvo. Se o escolhido falhar, a mensagem sai na voz do Windows."))
+s.append(tabela(["Servidor", "Precisa de", "Como é"], [
+    ["<b>Microsoft grátis</b> (padrão)", "Nada", "As vozes de sempre (Francisca, Antonio...). Falha de vez em quando: o programa tenta de novo sozinho."],
+    ["<b>Piper</b>", "Nada: roda no seu PC", "Nunca dá erro de rede. Leve, mas um pouco robótica. Vozes: faber, cadu e jeff."],
+    ["<b>Kokoro</b>", "Nada: roda no seu PC", "Nunca dá erro de rede e soa quase tão natural quanto as da internet, mas usa bastante o processador. Vozes: dora, alex e santa."],
+    ["<b>Azure</b>", "A sua chave da Microsoft Azure", "As mesmas vozes do grátis, pelo serviço oficial, que não fica falhando."],
+    ["<b>Google</b>, <b>ElevenLabs</b>, <b>OpenAI</b>", "A sua chave", "Vozes de cada serviço, escolhidas na página."],
+], [34, 36, 100]))
+s.append(dica("O Piper e o Kokoro baixam a voz na primeira vez que são escolhidos (Piper: uns 60 MB por voz; "
+              "Kokoro: uns 120 MB), na pasta <b>vozes</b>. Enquanto baixa, sai a voz do Windows. Nos servidores "
+              "com chave, a cobrança é na conta dona da chave (todos têm uma cota grátis por mês), e a página "
+              "nunca mostra a chave salva."))
+
 s.append(p("Testando sem live", h2))
 s.append(p("Para experimentar a voz, os comandos e as configurações antes da live, abra o LeitorChat.exe "
            f"e aperte <b>T</b> na contagem (ou, no lugar do usuário do TikTok, digite <b>teste</b>). O programa não conecta no TikTok: "
@@ -343,7 +358,8 @@ s.append(p("Estes ficam <b>gravados no config.json</b>, como se você tivesse mu
            "configurações. Assim os moderadores conseguem ajustar tudo de qualquer lugar, só pelo chat."))
 s.append(tabela(["Comando", "O que faz"], [
     [cmd("!voz antonio"), "Troca a voz: francisca, thalita, antonio, raquel, duarte ou maria (do Windows, "
-                          f"funciona sem internet). Com sotaque de gringo: ava, emma, brian, william, vivienne, remy, seraphina, florian, giuseppe ou hyunsu. Só {cmd('!voz')} fala a lista."],
+                          f"funciona sem internet). Com sotaque de gringo: ava, emma, brian, william, vivienne, remy, seraphina, florian, giuseppe ou hyunsu. "
+                          f"No Piper: faber, cadu ou jeff. No Kokoro: dora, alex ou santa. Só {cmd('!voz')} fala a lista."],
     [cmd("!velocidade 5"), "Muda a velocidade da voz, de -10 (lenta) a 10 (rápida)."],
     [cmd("!volume 70"), "Muda o volume, de 0 a 100."],
     [cmd("!nomes"), "Liga ou desliga o “Fulano disse:” antes das mensagens."],
@@ -618,12 +634,13 @@ def j(v):
 def opcoes(linhas):
     return tabela(["Opção", "Padrão", "O que faz"],
                   [[f'<font name="Mono" size="8.5">{n}</font>',
-                    PADRAO_TEXTO.get(n, f'<font name="Mono" size="8.5">{j(_cfg[n])}</font>'), t]
+                    PADRAO_TEXTO[n] if n in PADRAO_TEXTO else f'<font name="Mono" size="8.5">{j(_cfg[n])}</font>', t]
                    for n, t in linhas], [42, 44, 84])
 
 
 # valores longos demais para a coluna: descritos em palavras
-PADRAO_TEXTO = {"tosu_url": "<i>o endereço padrão do tosu</i>", "sons": "<i>os 7 sons padrão</i>"}
+PADRAO_TEXTO = {"tosu_url": "<i>o endereço padrão do tosu</i>", "sons": "<i>os 7 sons padrão</i>",
+                "chave_... / voz_...": "<i>chaves vazias e uma voz de cada servidor</i>"}
 
 
 s += [PageBreak(), p("9. O arquivo config.json", h1),
@@ -676,6 +693,13 @@ s.append(opcoes([
             "ou <b>\"windows\"</b> (voz do Windows, funciona sem internet). Também há vozes de outros países que falam "
             "português com sotaque, como <b>\"en-US-AvaMultilingualNeural\"</b> e <b>\"it-IT-GiuseppeMultilingualNeural\"</b> "
             "(a lista completa aparece na página de configurações)."),
+    ("servidor_voz", "Quem gera a voz: <b>\"gratis\"</b> (padrão), <b>\"piper\"</b>, <b>\"kokoro\"</b>, "
+                     "<b>\"azure\"</b>, <b>\"google\"</b>, <b>\"elevenlabs\"</b> ou <b>\"openai\"</b>."),
+    ("voz_piper", "A voz do Piper: <b>\"faber\"</b>, <b>\"cadu\"</b> ou <b>\"jeff\"</b>."),
+    ("voz_kokoro", "A voz do Kokoro: <b>\"pf_dora\"</b> (feminina), <b>\"pm_alex\"</b> ou <b>\"pm_santa\"</b> (masculinas)."),
+    ("chave_... / voz_...", "A chave e a voz de cada servidor pago: <b>chave_azure</b> e <b>regiao_azure</b>, "
+                            "<b>chave_google</b> e <b>voz_google</b>, <b>chave_elevenlabs</b> e <b>voz_elevenlabs</b> (o Voice ID), "
+                            "<b>chave_openai</b> e <b>voz_openai</b>. Mais fácil pela página, que explica onde pegar cada chave."),
     ("velocidade", "Velocidade da voz, de <b>-10</b> (bem lenta) a <b>10</b> (bem rápida)."),
     ("volume", "Volume da voz, de <b>0</b> a <b>100</b>."),
     ("ler_nome", "<b>true</b>: fala “Fulano disse: mensagem”. <b>false</b>: fala só a mensagem."),
@@ -801,7 +825,10 @@ s.append(tabela(["Problema", "Solução"], [
      "de abrir o programa. Para testar sem live, use o modo de teste (seção 3)."],
     ["“O Windows protegeu o computador”", "Clique em <b>Mais informações</b> e depois em <b>Executar assim mesmo</b>."],
     ["A voz não fala nada", f"Veja se alguém usou {cmd('!mudo')} e se apareceu algum erro de voz na janela. Sem internet, o programa já passa sozinho para a voz do Windows."],
-    ["A voz mudou para a do Windows sozinha", "A voz da internet falhou (conexão ou serviço fora do ar). O programa tenta de novo a cada minuto e volta sozinho."],
+    ["A voz mudou para a do Windows sozinha", "A voz da internet falhou (conexão ou serviço fora do ar). O programa tenta de novo a cada minuto e volta sozinho. "
+                                              "Se acontece muito, escolha o Piper ou o Kokoro, que rodam no PC."],
+    ["“A voz da Azure (ou do Google...) não funcionou”", "A janela mostra o motivo: chave errada, sem saldo, cota acabou ou voz errada. "
+                                                         "Corrija na página e use <b>Testar a voz</b>."],
     [f"{cmd('!np')}, {cmd('!pp')} ou {cmd('!rank')} respondem “Não consegui ver o osu agora”",
      "Veja se a janela do tosu está aberta (se não, abra o <b>tosu\\tosu.exe</b>) e confira em http://127.0.0.1:24050."],
     ["Aparece “tosu não encontrado na pasta tosu”", "Falta o <b>tosu.exe</b> dentro da pasta <b>tosu</b>, "

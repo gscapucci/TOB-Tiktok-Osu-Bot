@@ -1,0 +1,2 @@
+# o cmd do Windows lê errado arquivo .bat com quebra de linha LF (ainda mais com acentos)
+*.bat text eol=crlf
