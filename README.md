@@ -491,6 +491,12 @@ O chat pede mapas, eles entram numa fila e você abre um de cada vez.
   e a espera entre comandos continuam valendo. Precisa do chat do osu! configurado; se o envio falhar
   (ou o chat não estiver configurado), a voz avisa e o pedido fica guardado na fila, para sair com o
   `!proximo` (o navegador não abre sozinho no meio da partida).
+- **Atalho de teclado** (vem desligado; na parte **Pedidos de mapas** da página, clique na caixa
+  **Atalho do próximo pedido** e aperte a tecla, ou `"atalho_proximo": "ctrl+alt+n"` no config.json): a tecla faz o
+  mesmo que o `!proximo`, mesmo com o osu! na frente, sem sair do jogo. Vale tecla sozinha (`pause`) ou com
+  `ctrl`, `alt`, `shift` e `win` (`ctrl+alt+n`, `ctrl+shift+p`). O Windows entrega a tecla só para o
+  programa, então o jogo não a recebe: escolha uma que você não usa nele. Se outro programa já usar a
+  tecla, a janela avisa. Só no Windows.
 - **Pedir só com presente** (vem desligado; `!pedidopresente`, a caixinha na parte **Pedidos de mapas**
   da página, ou `"pedir_com_presente": true`): cada presente que a pessoa manda vale **um pedido**.
   Numa sequência, cada presente conta (5 rosas = 5 pedidos), mas o limite por pessoa continua valendo:
@@ -508,6 +514,7 @@ O chat pede mapas, eles entram numa fila e você abre um de cada vez.
 | `pedidos_por_pessoa` | Quantos pedidos cada pessoa pode ter na fila ao mesmo tempo (`0` = sem limite) | `1` |
 | `fila_pedidos` | `false`: pedidos vão direto para o chat do osu!, sem fila e sem a voz anunciar | `true` |
 | `pedir_com_presente` | `true`: cada presente que a pessoa manda vale um `!pedir` | `false` |
+| `atalho_proximo` | Tecla que faz o mesmo que o `!proximo` sem sair do jogo (ex.: `"ctrl+alt+n"`, `"pause"`; `""` desliga) | `""` |
 | Desligar tudo | `"comandos_desativados": ["pedir", "pedidos", "cancelar", "proximo", "remover", "fecharpedidos", "abrirpedidos", "zerarpedidos"]` | — |
 
 ---
@@ -597,6 +604,7 @@ configurações. Os comandos de chat que mudam uma configuração gravam no
 | Tamanho da fila de pedidos | `!limitepedidos N` | `"pedidos_maximos": N` |
 | Pedidos por pessoa | `!porpessoa N` | `"pedidos_por_pessoa": N` |
 | Pedir só com presente | `!pedidopresente` | `"pedir_com_presente": true/false` |
+| Atalho do próximo pedido | — | `"atalho_proximo": "ctrl+alt+n"` |
 | Prefixo, tosu, página | — | `"prefixo"`, `"tosu_url"`, `"web_porta"`, `"web_rede_local"`, `"abrir_pagina"` |
 
 ---

@@ -24,6 +24,7 @@ Pedidos de mapas do osu! (a fila fica salva em pedidos.txt):
                          !abrirpedidos  !zerarpedidos  !limitepedidos <número>  !porpessoa <número>
                          !filapedidos (liga/desliga a fila: desligada, cada pedido vai direto para o osu!)
                          !pedidopresente (liga/desliga: cada presente vale um !pedir)
+    Atalho de teclado (ATALHO_PROXIMO, ex.: "ctrl+alt+n"): faz o mesmo que o !proximo sem sair do jogo.
 
 osu! (o tosu abre sozinho, se estiver na pasta tosu):  !np (mapa atual)  !pp  !rank  !recorde
     e avisos automáticos de mapa novo (AVISAR_MAPA) e de recorde de PP da live (AVISAR_RECORDE)
@@ -137,6 +138,9 @@ PEDIDOS_POR_PESSOA = 1  # quantos pedidos cada pessoa pode ter na fila ao mesmo 
 FILA_PEDIDOS = True     # False: cada !pedir vai direto para o seu chat do osu!, sem fila e sem a voz anunciar
 PEDIR_COM_PRESENTE = False  # True: cada presente que a pessoa manda vale um !pedir (você e os mods não precisam)
 COMANDOS_DESATIVADOS = []  # comandos desligados, sem o "!". ex.: ["copiar", "top"]
+# tecla que faz o mesmo que o !proximo, mesmo com o jogo na frente (só no Windows). "" desliga.
+# ex.: "ctrl+alt+n", "ctrl+shift+p", "pause", "ctrl+num5". O jogo não recebe essa tecla: use uma que você não usa nele.
+ATALHO_PROXIMO = ""
 
 # osu! (precisa do tosu aberto junto com o jogo)
 TOSU_URL = "http://127.0.0.1:24050/json/v2"
@@ -170,7 +174,7 @@ PASTA_SONS = os.path.join(PASTA, "sons")  # onde ficam os arquivos dos SONS (a p
 OPCOES = {nome.lower(): nome for nome in (
     "TIKTOK_USUARIO", "VOZ", "SERVIDOR_VOZ", "CHAVE_AZURE", "REGIAO_AZURE", "CHAVE_GOOGLE", "VOZ_GOOGLE",
     "CHAVE_ELEVENLABS", "VOZ_ELEVENLABS", "CHAVE_OPENAI", "VOZ_OPENAI", "VOZ_PIPER", "VOZ_KOKORO", "VELOCIDADE", "VOLUME", "LER_NOME", "TAMANHO_MAXIMO", "FILA_MAXIMA", "PALAVRAS_BLOQUEADAS",
-    "USUARIOS_SILENCIADOS", "PREFIXO", "MODERADORES", "ESPERA_COMANDO", "ESPERA_SOM", "SONS", "PRESENTES", "PEDIDOS_MAXIMOS", "PEDIDOS_POR_PESSOA", "FILA_PEDIDOS", "PEDIR_COM_PRESENTE", "COMANDOS_DESATIVADOS",
+    "USUARIOS_SILENCIADOS", "PREFIXO", "MODERADORES", "ESPERA_COMANDO", "ESPERA_SOM", "SONS", "PRESENTES", "PEDIDOS_MAXIMOS", "PEDIDOS_POR_PESSOA", "FILA_PEDIDOS", "PEDIR_COM_PRESENTE", "COMANDOS_DESATIVADOS", "ATALHO_PROXIMO",
     "TOSU_URL", "AVISAR_MAPA", "AVISAR_RECORDE", "OSU_USUARIO", "OSU_IRC_SENHA", "WEB_PORTA", "WEB_REDE_LOCAL", "ABRIR_PAGINA")}
 OPCOES_ANTIGAS = ("janela_pedidos",)  # opções de versões anteriores: ignoradas sem aviso
 SECRETAS = ("osu_irc_senha", "chave_azure", "chave_google", "chave_elevenlabs", "chave_openai")  # a página nunca
@@ -207,6 +211,7 @@ def mudar_config(mudancas: dict) -> list:
             avisos.append(f"mudei agora, mas não consegui gravar o config.json ({e}).")
     esquecer_silenciados()
     adiantar_voz_local()
+    trocar_atalho()
     for aviso in avisos:
         print(f"*** {aviso}")
     return avisos
@@ -255,6 +260,12 @@ def aplicar_config(config: dict) -> list:
             opcoes = VOZES_LOCAIS[nome[4:].lower()]
             if valor not in opcoes:
                 avisos.append(f"\"{chave}\" vai de: {', '.join(opcoes)}. "
+                              f"Mantive: {json.dumps(atual, ensure_ascii=False)}")
+                continue
+        if nome == "ATALHO_PROXIMO":
+            valor = valor.replace(" ", "").lower()
+            if ler_atalho(valor) is None:
+                avisos.append(f"\"{chave}\": não entendi \"{valor}\": use teclas como ctrl+alt+n, ctrl+shift+p ou pause. "
                               f"Mantive: {json.dumps(atual, ensure_ascii=False)}")
                 continue
         if nome == "PREFIXO" and not valor.strip():
@@ -1621,6 +1632,102 @@ def achar_pessoa(texto: str) -> tuple:
     return ("" if " " in alvo else alvo), False, False
 
 
+trava_proximo = threading.Lock()  # o !proximo do chat e o atalho de teclado ao mesmo tempo
+
+
+def proximo_pedido():
+    """Manda o próximo pedido da fila (o !proximo e o ATALHO_PROXIMO)."""
+    with trava_proximo:
+        if not pedidos:
+            falar("Não tem nenhum pedido na fila.")
+            return
+        p = pedidos.pop(0)
+        salvar_pedidos()
+    threading.Thread(target=abrir_pedido, args=(p,), daemon=True).start()  # o IRC leva uns segundos
+    print(f"[pedido de {p['nome']}: {p['texto']}]\n  {p['url']}")
+    falar(f"Próximo pedido, de {p['nome']}. Faltam {len(pedidos)}.")
+
+
+# ---------------- Atalho de teclado (Windows) ----------------
+# Tecla registrada no Windows (RegisterHotKey): funciona com o osu! ou qualquer outra janela na frente.
+# O Windows entrega a tecla só para o programa, então o jogo não a recebe: escolha uma que você não usa nele.
+MODIFICADORES = {"ctrl": 0x2, "alt": 0x1, "shift": 0x4, "win": 0x8}
+TECLAS_ESPECIAIS = {"espaco": 0x20, "space": 0x20, "enter": 0x0D, "tab": 0x09, "esc": 0x1B, "insert": 0x2D,
+                    "delete": 0x2E, "home": 0x24, "end": 0x23, "pageup": 0x21, "pagedown": 0x22,
+                    "cima": 0x26, "baixo": 0x28, "esquerda": 0x25, "direita": 0x27,
+                    "up": 0x26, "down": 0x28, "left": 0x25, "right": 0x27, "pause": 0x13,
+                    "scrolllock": 0x91, "printscreen": 0x2C,
+                    **{f"f{n}": 0x6F + n for n in range(1, 25)},
+                    **{f"num{n}": 0x60 + n for n in range(10)}}
+WM_HOTKEY, WM_TROCAR_ATALHO = 0x0312, 0x8001  # 0x8001 = WM_APP + 1: aviso nosso para trocar a tecla
+id_thread_atalho = None
+
+
+def ler_atalho(texto: str):
+    """"ctrl+alt+n" -> (modificadores, tecla), ou None se não der para entender. "" -> (0, 0) (desligado)."""
+    partes = [p.strip().lower() for p in texto.replace(" ", "").split("+")]
+    if partes == [""]:
+        return 0, 0
+    *mods, tecla = partes
+    if not tecla or any(m not in MODIFICADORES for m in mods) or len(set(mods)) != len(mods):
+        return None
+    if len(tecla) == 1 and tecla.isascii() and tecla.isalnum():
+        codigo = ord(tecla.upper())
+    elif tecla in TECLAS_ESPECIAIS:
+        codigo = TECLAS_ESPECIAIS[tecla]
+    else:
+        return None
+    return sum(MODIFICADORES[m] for m in mods), codigo
+
+
+def vigia_atalho():
+    """Espera o ATALHO_PROXIMO. Quando o atalho muda (página ou config), mudar_config avisa e ele troca a tecla."""
+    global id_thread_atalho
+    import ctypes
+    from ctypes import wintypes
+    user32, kernel32 = ctypes.windll.user32, ctypes.windll.kernel32
+    id_thread_atalho = kernel32.GetCurrentThreadId()
+    msg = wintypes.MSG()
+    user32.PeekMessageW(ctypes.byref(msg), None, 0, 0, 0)  # cria a fila de mensagens desta thread
+    registrado = None  # o atalho que está valendo agora
+
+    def registrar_atalho():
+        nonlocal registrado
+        if registrado:
+            user32.UnregisterHotKey(None, 1)
+            registrado = None
+        lido = ler_atalho(ATALHO_PROXIMO)
+        if not lido or not lido[1]:
+            return
+        if user32.RegisterHotKey(None, 1, lido[0] | 0x4000, lido[1]):  # 0x4000: segurar não repete
+            registrado = ATALHO_PROXIMO
+            print(f"Atalho para o próximo pedido: {ATALHO_PROXIMO}")
+        else:
+            print(f"*** Não consegui usar o atalho {ATALHO_PROXIMO}: outro programa já usa essa tecla. "
+                  "Escolha outra na página ou no config.json (atalho_proximo).")
+
+    registrar_atalho()
+    while user32.GetMessageW(ctypes.byref(msg), None, 0, 0) > 0:
+        if msg.message == WM_HOTKEY:
+            try:
+                proximo_pedido()
+            except Exception as e:  # um erro aqui não pode desligar o atalho
+                print(f"*** Erro no atalho do próximo pedido: {e}")
+        elif msg.message == WM_TROCAR_ATALHO and registrado != ATALHO_PROXIMO:
+            registrar_atalho()
+
+
+def trocar_atalho():
+    if id_thread_atalho:
+        import ctypes
+        ctypes.windll.user32.PostThreadMessageW(id_thread_atalho, WM_TROCAR_ATALHO, 0, 0)
+
+
+def iniciar_atalho():
+    if sys.platform == "win32":
+        threading.Thread(target=vigia_atalho, daemon=True).start()
+
+
 def tratar_comando(user, nome: str, texto: str, dono: str) -> bool:
     """Executa um comando do chat. Retorna True se era um comando (e não deve ser lido)."""
     global pausado, pedidos_abertos, ultimo_som
@@ -1814,14 +1921,7 @@ def tratar_comando(user, nome: str, texto: str, dono: str) -> bool:
             falar(f"Aviso de {arg.lower()} {'ligado' if ligado else 'desligado'}.")
             return True
         if cmd == "proximo":
-            if not pedidos:
-                falar("Não tem nenhum pedido na fila.")
-                return True
-            p = pedidos.pop(0)
-            salvar_pedidos()
-            threading.Thread(target=abrir_pedido, args=(p,), daemon=True).start()  # o IRC leva uns segundos
-            print(f"[pedido de {p['nome']}: {p['texto']}]\n  {p['url']}")
-            falar(f"Próximo pedido, de {p['nome']}. Faltam {len(pedidos)}.")
+            proximo_pedido()
             return True
         if cmd == "remover":
             try:
@@ -2616,6 +2716,10 @@ button.principal { background: var(--destaque); border-color: var(--destaque); c
       como fazer. Se o pedido sair da fila sem ser atendido (!cancelar, !remover, !zerarpedidos), a pessoa pode pedir de
       novo. Os pedidos que cada um ainda pode fazer ficam guardados em pedidos_por_presente.json, mesmo fechando o
       programa. Não vale para você e os mods. No chat: !pedidopresente.</small></span></label>
+    <label for="atalho_proximo">Atalho do próximo pedido<small>Uma tecla que faz o mesmo que o !proximo, mesmo com o
+      jogo na frente. Clique na caixa e aperte a tecla (ex.: Ctrl+Alt+N); Backspace apaga e desliga. O jogo não
+      recebe essa tecla, então escolha uma que você não usa nele. Só no Windows.</small></label>
+    <input type="text" id="atalho_proximo" placeholder="desligado" autocomplete="off" spellcheck="false" readonly>
   </section>
 
   <section>
@@ -2900,6 +3004,25 @@ addEventListener("focus", async () => {
 });
 
 document.addEventListener("input", e => { if (e.target.type === "range") atualizarFaixas(); });
+// atalho do próximo pedido: a caixa grava a tecla apertada ("ctrl+alt+n"), no mesmo jeito do config.json
+const TECLAS_ATALHO = {" ": "espaco", "Enter": "enter", "Insert": "insert", "Delete": "delete", "Home": "home",
+  "End": "end", "PageUp": "pageup", "PageDown": "pagedown", "ArrowUp": "cima", "ArrowDown": "baixo",
+  "ArrowLeft": "esquerda", "ArrowRight": "direita", "Pause": "pause", "ScrollLock": "scrolllock"};
+$("atalho_proximo").addEventListener("keydown", e => {
+  if (e.key === "Tab") return;  // deixa sair da caixa pelo teclado
+  e.preventDefault();
+  if (["Backspace", "Escape"].includes(e.key)) { e.target.value = ""; return; }
+  if (["Control", "Alt", "Shift", "Meta", "AltGraph"].includes(e.key)) return;  // espera a tecla de verdade
+  let tecla = /^F([1-9]|1[0-9]|2[0-4])$/.test(e.key) ? e.key.toLowerCase()
+    : /^Numpad[0-9]$/.test(e.code) ? "num" + e.code.slice(6)
+    : /^Key[A-Z]$/.test(e.code) ? e.code.slice(3).toLowerCase()
+    : /^Digit[0-9]$/.test(e.code) ? e.code.slice(5)
+    : TECLAS_ATALHO[e.key];
+  if (!tecla) return;
+  const mods = [e.ctrlKey && "ctrl", e.altKey && "alt", e.shiftKey && "shift", e.metaKey && "win"].filter(Boolean);
+  e.target.value = [...mods, tecla].join("+");
+  e.target.dispatchEvent(new Event("input", {bubbles: true}));
+});
 $("link_pedidos").textContent = location.origin + "/pedidos";
 $("link_studio").textContent = "http://localtest.me:" + (location.port || 80) + "/pedidos";
 $("copiar_link").onclick = async () => {
@@ -3140,6 +3263,7 @@ def main():
     carregar_creditos()
     salvar_pedidos()  # a fila começa vazia: o pedidos.txt não pode continuar mostrando a da live anterior
     adiantar_voz_local()
+    iniciar_atalho()
     if usuario.lower() in ("teste", "--teste"):
         threading.Thread(target=narrador, daemon=True).start()
         threading.Thread(target=vigia_osu, daemon=True).start()

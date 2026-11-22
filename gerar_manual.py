@@ -440,6 +440,10 @@ s.append(passos([
     (f"Escreva {cmd('!proximo')} no chat", "A voz fala de quem é o pedido. Se você configurou o chat do osu! "
                                            "(veja abaixo), o pedido chega numa mensagem sua para você mesmo, "
                                            "dentro do jogo. Se não, abre no navegador."),
+    ("Ou use um atalho de teclado", "Na página, parte <b>Pedidos de mapas</b>, clique na caixa <b>Atalho do "
+                                    "próximo pedido</b> e aperte uma tecla (ex.: <b>Ctrl+Alt+N</b>), e clique em "
+                                    "<b>Salvar</b>. Ela faz o mesmo que o !proximo, sem sair do jogo. O jogo não "
+                                    "recebe essa tecla: escolha uma que você não usa nele."),
     ("Abra o mapa", "No chat do osu!, clique no pedido: pedido com link abre o mapa <b>direto no jogo</b>. "
                     "Pedido com nome abre a busca do site do osu! no navegador."),
     ("Baixe, se precisar", "Pelo navegador, você precisa estar logado no site. No lazer, dê dois cliques no "
@@ -582,6 +586,7 @@ s.append(tabela(["Função", "Durante a live", "No config.json"], [
     ["Aceitar pedidos", f"{cmd('!fecharpedidos')} / {cmd('!abrirpedidos')}", "—"],
     ["Fila de pedidos", cmd("!filapedidos"), '"fila_pedidos": true / false'],
     ["Pedir só com presente", cmd("!pedidopresente"), '"pedir_com_presente": true / false'],
+    ["Atalho do próximo pedido", "—", '"atalho_proximo": "ctrl+alt+n"'],
     ["Aviso de mapa novo", cmd("!avisos mapa"), '"avisar_mapa": true / false'],
     ["Aviso de recorde", cmd("!avisos recorde"), '"avisar_recorde": true / false'],
     ["Moderadores", f"{cmd('!mod')} / {cmd('!desmod')} (só você)", '"moderadores": ["usuario"]'],
@@ -739,6 +744,9 @@ s.append(opcoes([
                      "pedido vai direto para o seu chat do osu!, sem a voz anunciar."),
     ("pedir_com_presente", "<b>true</b>: cada presente que a pessoa manda vale um !pedir. Não vale para você "
                            "e os moderadores."),
+    ("atalho_proximo", "Tecla que faz o mesmo que o !proximo, mesmo com o jogo na frente. Ex.: <b>\"ctrl+alt+n\"</b> ou "
+                       "<b>\"pause\"</b>; <b>\"\"</b> desliga. O jogo não recebe essa tecla: escolha uma "
+                       "que você não usa nele. Só no Windows."),
     ("avisar_mapa", "<b>true</b>: a voz anuncia quando você começa a jogar um mapa novo."),
     ("avisar_recorde", "<b>true</b>: a voz anuncia quando você bate o recorde de PP da live."),
     ("tosu_url", "Endereço onde o app busca os dados do tosu: <b>http://127.0.0.1:24050/json/v2</b>. "
