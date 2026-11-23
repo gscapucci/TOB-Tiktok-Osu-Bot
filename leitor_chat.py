@@ -8,7 +8,7 @@ Uso:
 Comandos do chat (as respostas são faladas):
     Todo mundo:  !comandos  !mensagens  !top  !sons
                  e os comandos de som do config.json ("sons": {"ai": "ai.mp3"} -> !ai)
-    Você e MODERADORES:  !mudo  !voltar  !limpar  !velocidade <-10 a 10>  !volume <0 a 100>
+    Você e MODERADORES:  !mudo  !voltar  !limpar  !velocidade <-10 a 10>  !volume <0 a 100, +10 ou -10>
                          !apelido <usuário> <apelido>  !copiar <texto>
                          !voz <francisca, antonio, maria...>  !nomes  !bloquear <palavra>
                          !desbloquear <palavra>  !silenciar <nome ou usuário>  !liberar <nome ou usuário>
@@ -142,7 +142,7 @@ COMANDOS_DESATIVADOS = []  # comandos desligados, sem o "!". ex.: ["copiar", "to
 # atalhos de teclado: "tecla": "comando". Cada tecla faz o mesmo que você mandar o comando no chat, mesmo com o
 # jogo na frente (só no Windows). O comando pode ter o que vem depois dele ("volume 50") e pode ser um som ("ai").
 # Teclas: "ctrl+alt+n", "ctrl+shift+p", "pause", "ctrl+num5", "f13"... O jogo não recebe essas teclas: use as que
-# você não usa nele. ex.: {"ctrl+alt+n": "proximo", "ctrl+alt+m": "mudo", "ctrl+alt+v": "voltar"}
+# você não usa nele. ex.: {"ctrl+alt+n": "proximo", "ctrl+alt+m": "mudo", "ctrl+alt+cima": "volume +10"}
 ATALHOS = {"ctrl+alt+n": "proximo"}
 
 # osu! (precisa do tosu aberto junto com o jogo)
@@ -1387,7 +1387,7 @@ DESCRICAO_COMANDO = {
     "limpar": "Apaga as mensagens que estavam esperando para serem lidas.",
     "apelido": "Dá um apelido para alguém (ex.: apelido fulano Aninha). A voz passa a chamar a pessoa assim.",
     "velocidade": "Muda a velocidade da voz, de -10 a 10.",
-    "volume": "Muda o volume da voz, de 0 a 100.",
+    "volume": "Muda o volume da voz, de 0 a 100. Com + ou - na frente, sobe ou desce a partir do volume de agora (volume +10, volume -10).",
     "voz": "Troca a voz: francisca, thalita, antonio, raquel, duarte ou maria. Com sotaque de gringo: ava, emma, brian, william, "
            "vivienne, remy, seraphina, florian, giuseppe ou hyunsu. No Piper: faber, cadu ou jeff. No Kokoro: dora, "
            "alex ou santa. Sem nome, fala a lista.",
@@ -1920,10 +1920,13 @@ def tratar_comando(user, nome: str, texto: str, dono: str) -> bool:
         if cmd in NUMERICOS:
             chave, resposta = NUMERICOS[cmd]
             try:
-                n = int(arg)
+                n = int(arg.replace(" ", ""))  # "- 10" também vale
             except ValueError:
-                falar(f"Use: exclamação {FALADO.get(cmd, cmd)} e um número.")
+                falar(f"Use: exclamação {FALADO.get(cmd, cmd)} e um número." +
+                      (" Com mais ou menos na frente, sobe ou desce: exclamação volume mais 10." if cmd == "volume" else ""))
                 return True
+            if cmd == "volume" and arg.strip()[0] in "+-":  # !volume +10 / -10: sobe ou desce a partir do de agora
+                n = max(0, min(100, VOLUME + n))  # já no limite: sem o aviso de "vai de 0 a 100"
             mudar_config({chave: n})  # fora do limite, usa o limite mais próximo
             valor = globals()[OPCOES[chave]]
             if cmd == "porpessoa" and valor in (0, 1):
@@ -2724,7 +2727,7 @@ button.principal { background: var(--destaque); border-color: var(--destaque); c
       <small style="display:inline">Fala uma frase com o que está salvo.</small></p>
     <label for="velocidade">Velocidade<small>De -10 (bem lenta) a 10 (bem rápida). No chat: !velocidade 5 ou !vel 5.</small></label>
     <div class="faixa"><input type="range" id="velocidade" min="-10" max="10" step="1"><output for="velocidade"></output></div>
-    <label for="volume">Volume<small>Volume da voz, de 0 a 100. No chat: !volume 70 ou !vol 70.</small></label>
+    <label for="volume">Volume<small>Volume da voz, de 0 a 100. No chat: !volume 70 ou !vol 70; !vol +10 e !vol -10 sobem e descem.</small></label>
     <div class="faixa"><input type="range" id="volume" min="0" max="100" step="1"><output for="volume"></output></div>
   </section>
 
@@ -2809,8 +2812,8 @@ button.principal { background: var(--destaque); border-color: var(--destaque); c
   <section>
     <h2>Atalhos de teclado</h2>
     <p class="sub" style="margin:4px 0 0">Cada tecla faz o mesmo que você mandar um comando no chat, mesmo com o jogo na
-      frente: Ctrl+Alt+N para o <code>!proximo</code>, Ctrl+Alt+M para o <code>!mudo</code>, F13 para o
-      <code>!volume 50</code>... Vale qualquer comando, com o que vem depois dele, e também os sons (<code>!ai</code>).
+      frente: Ctrl+Alt+N para o <code>!proximo</code>, Ctrl+Alt+M para o <code>!mudo</code>, Ctrl+Alt+↑ para o
+      <code>!volume +10</code>... Vale qualquer comando, com o que vem depois dele, e também os sons (<code>!ai</code>).
       Para escolher a tecla, clique na caixa da esquerda e aperte; Backspace apaga. O jogo não recebe essas teclas, então
       escolha as que você não usa nele. Só no Windows. Clique em <b>Salvar</b> para valer.</p>
     <div id="lista_atalhos"></div>

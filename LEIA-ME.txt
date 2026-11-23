@@ -64,7 +64,7 @@ COMANDOS DO CHAT
                          remy, seraphina, florian, giuseppe ou hyunsu
                          no Piper: faber, cadu ou jeff; no Kokoro: dora, alex ou santa
   !velocidade <-10 a 10> velocidade da voz (!vel)
-  !volume <0 a 100>      volume da voz (!vol)
+  !volume <0 a 100>      volume da voz (!vol); !volume +10 e !volume -10 sobem e descem
   !nomes                 liga/desliga o "Fulano disse:" antes das mensagens
   !bloquear <palavra>    não lê mais mensagens com essa palavra (!bl)
   !desbloquear <palavra> volta a ler mensagens com essa palavra (!dbl)
@@ -167,7 +167,8 @@ CONFIGURAÇÕES
                          pedidos_por_presente.json. Não vale para você e os mods.
   atalhos                teclas que fazem o mesmo que um comando no chat, sem sair do jogo.
                          Vem {"ctrl+alt+n": "proximo"}; ex.: {"ctrl+alt+n": "proximo",
-                         "ctrl+alt+m": "mudo", "f13": "volume 50", "ctrl+alt+a": "ai"}.
+                         "ctrl+alt+m": "mudo", "ctrl+alt+cima": "volume +10",
+                         "ctrl+alt+baixo": "volume -10", "ctrl+alt+a": "ai"}.
                          Vale qualquer comando ou som. O jogo não recebe essas teclas.
   comandos_desativados   comandos desligados, sem o !. ex.: ["copiar", "top"]
   tosu_url               endereço do tosu; normalmente não precisa mudar

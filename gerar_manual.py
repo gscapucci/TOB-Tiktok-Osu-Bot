@@ -361,7 +361,8 @@ s.append(tabela(["Comando", "O que faz"], [
                           f"funciona sem internet). Com sotaque de gringo: ava, emma, brian, william, vivienne, remy, seraphina, florian, giuseppe ou hyunsu. "
                           f"No Piper: faber, cadu ou jeff. No Kokoro: dora, alex ou santa. Só {cmd('!voz')} fala a lista."],
     [cmd("!velocidade 5"), "Muda a velocidade da voz, de -10 (lenta) a 10 (rápida)."],
-    [cmd("!volume 70"), "Muda o volume, de 0 a 100."],
+    [cmd("!volume 70"), f"Muda o volume, de 0 a 100. {cmd('!volume +10')} e {cmd('!volume -10')} sobem e "
+                        "descem a partir do volume de agora."],
     [cmd("!nomes"), "Liga ou desliga o “Fulano disse:” antes das mensagens."],
     [cmd("!bloquear palavra"), "Mensagens com essa palavra deixam de ser lidas. A voz não repete a palavra."],
     [cmd("!desbloquear palavra"), "Volta a ler mensagens com essa palavra."],
@@ -416,7 +417,7 @@ s.append(passos([
     ("Escolha a tecla", "Clique na caixa da esquerda e aperte a tecla, sozinha (Pause, F13) ou com Ctrl, Alt, "
                         "Shift e Win (Ctrl+Alt+M). Backspace apaga."),
     ("Escreva o comando", f"Na caixa da direita, qualquer comando com o que vem depois dele "
-                          f"({cmd('!mudo')}, {cmd('!volume 50')}, {cmd('!fechar pedidos')}) ou um som "
+                          f"({cmd('!mudo')}, {cmd('!volume +10')}, {cmd('!fechar pedidos')}) ou um som "
                           f"({cmd('!ai')})."),
     ("Clique em Salvar", "Já vale na hora. <b>Tirar</b> apaga o atalho."),
 ]))
@@ -761,7 +762,7 @@ s.append(opcoes([
                            "e os moderadores."),
     ("atalhos", "Teclas que fazem o mesmo que um comando no chat, mesmo com o jogo na frente: "
                 "<b>{\"tecla\": \"comando\"}</b>. Vem <b>{\"ctrl+alt+n\": \"proximo\"}</b>; ex.: "
-                "<b>\"ctrl+alt+m\": \"mudo\"</b>, <b>\"f13\": \"volume 50\"</b>, <b>\"ctrl+alt+a\": \"ai\"</b>. "
+                "<b>\"ctrl+alt+m\": \"mudo\"</b>, <b>\"ctrl+alt+cima\": \"volume +10\"</b>, <b>\"ctrl+alt+a\": \"ai\"</b>. "
                 "O jogo não recebe essas teclas: escolha as que você não usa nele. Só no Windows."),
     ("avisar_mapa", "<b>true</b>: a voz anuncia quando você começa a jogar um mapa novo."),
     ("avisar_recorde", "<b>true</b>: a voz anuncia quando você bate o recorde de PP da live."),

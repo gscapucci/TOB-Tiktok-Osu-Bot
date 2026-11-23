@@ -384,7 +384,7 @@ live e valem até fechar o programa.
 | `!copiar texto` | Copia o texto para o seu **Ctrl+C**. "Copiei a mensagem de Fulano." É só de você e dos mods, para ninguém trocar o que você copiou. | — |
 | `!voz antonio` | Troca a voz: `francisca`, `thalita`, `antonio`, `raquel`, `duarte` ou `maria` (do Windows, sem internet). Com sotaque de gringo: `ava`, `emma`, `brian`, `william`, `vivienne`, `remy`, `seraphina`, `florian`, `giuseppe` ou `hyunsu`. No Piper: `faber`, `cadu` ou `jeff`; no Kokoro: `dora`, `alex` ou `santa`. Sem nome, fala a lista. | `voz` |
 | `!velocidade 5` | Muda a velocidade da voz (-10 a 10) | `velocidade` |
-| `!volume 70` | Muda o volume (0 a 100) | `volume` |
+| `!volume 70` | Muda o volume (0 a 100). `!volume +10` e `!volume -10` sobem e descem a partir do volume de agora | `volume` |
 | `!nomes` | Liga/desliga o "Fulano disse:" | `ler_nome` |
 | `!bloquear palavra` | Bloqueia uma palavra (a voz não repete a palavra, só aparece na janela) | `palavras_bloqueadas` |
 | `!desbloquear palavra` | Desbloqueia uma palavra | `palavras_bloqueadas` |
@@ -456,12 +456,14 @@ atalho, e Backspace na caixa da tecla apaga a tecla. No config.json, os atalhos 
   "ctrl+alt+m": "mudo",
   "ctrl+alt+v": "voltar",
   "ctrl+alt+l": "limpar",
+  "ctrl+alt+cima": "volume +10",
+  "ctrl+alt+baixo": "volume -10",
   "f13": "volume 50",
   "ctrl+alt+a": "ai"
 }
 ```
 
-- **O comando** pode ser qualquer um, com o que vem depois dele (`volume 50`, `fechar pedidos`), e também
+- **O comando** pode ser qualquer um, com o que vem depois dele (`volume 50`, `volume +10`, `fechar pedidos`), e também
   um som (`ai`). Com ou sem o `!` na frente, tanto faz. O comando vale como se você tivesse mandado no
   chat, e um comando desligado também não funciona pelo atalho.
 - **A tecla** pode ser sozinha (`pause`, `f13`) ou com `ctrl`, `alt`, `shift` e `win` (`ctrl+alt+n`,
