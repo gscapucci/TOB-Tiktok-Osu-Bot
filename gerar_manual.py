@@ -828,6 +828,8 @@ s.append(tabela(["Arquivo", "O que tem"], [
                                             "quantas mensagens mandou. Salva sozinha a cada 5 segundos. As de mais de "
                                             "<b>7 dias</b> são apagadas sozinhas quando o programa abre: "
                                             "copie para outra pasta a que quiser guardar."],
+    ["<b>tosu\\logs\\</b>", "Os logs do tosu, um por vez que ele abre (numa live chega a 7 MB). Os de mais de "
+                            "<b>7 dias</b> também são apagados sozinhos quando o programa abre."],
     ["<b>apelidos.txt</b>", "Os apelidos usados pela voz. Pode editar durante a live, vale na hora."],
     ["<b>pedidos.txt</b>", "A fila de pedidos de mapas, atualizada na hora."],
     ["<b>sons\\</b>", "Os arquivos dos sons. Qual comando toca cada um fica no config.json, em sons."],

@@ -199,6 +199,7 @@ ARQUIVOS
   registros\    planilhas de cada live (quem entrou e quantas mensagens mandou)
                 as de mais de 7 dias são apagadas sozinhas ao abrir o programa:
                 copie para outra pasta a que quiser guardar
+  tosu\logs\    logs do tosu; os de mais de 7 dias também são apagados ao abrir
   apelidos.txt  apelidos que a voz usa
   vozes\        as vozes do Piper e do Kokoro, se você usar (baixadas na primeira vez)
   sons\         os arquivos dos sons (qual comando toca cada um fica no config.json)

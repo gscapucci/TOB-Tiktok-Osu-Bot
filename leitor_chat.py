@@ -367,30 +367,44 @@ def registrar(user, mensagem=False):
         mudou = True
 
 
-DIAS_REGISTROS = 7  # planilhas de live mais antigas que isso são apagadas quando o programa abre
+DIAS_REGISTROS = 7  # planilhas de live e logs do tosu mais antigos que isso são apagados quando o programa abre
 
 
-def apagar_registros_antigos():
-    """Apaga as planilhas live_DATA_HORA.csv de mais de DIAS_REGISTROS dias (pela data no nome).
-    Outros arquivos que você puser na pasta registros não são mexidos."""
+def apagar_antigos(pasta, padrao, formato):
+    """Apaga da pasta os arquivos cujo nome bate com o padrão e cuja data no nome (grupo 1, no formato dado) tem
+    mais de DIAS_REGISTROS dias. Outros arquivos da pasta não são mexidos. Devolve quantos apagou."""
     limite = datetime.now() - timedelta(days=DIAS_REGISTROS)
     apagados = 0
     try:
-        nomes = os.listdir(PASTA_REGISTROS)
+        nomes = os.listdir(pasta)
     except OSError:
-        return
+        return 0
     for nome in nomes:
-        m = re.fullmatch(r"live_(\d{4}-\d{2}-\d{2}_\d{2}-\d{2})\.csv", nome)
+        m = re.fullmatch(padrao, nome)
         if not m:
             continue
         try:
-            if datetime.strptime(m.group(1), "%Y-%m-%d_%H-%M") < limite:
-                os.remove(os.path.join(PASTA_REGISTROS, nome))
+            if datetime.strptime(m.group(1), formato) < limite:
+                os.remove(os.path.join(pasta, nome))
                 apagados += 1
-        except (ValueError, OSError):  # data estranha no nome, ou a planilha aberta no Excel: fica para a próxima
+        except (ValueError, OSError):  # data estranha no nome, ou o arquivo aberto em outro programa: fica para a próxima
             pass
-    if apagados:
-        print(f"[apaguei {apagados} {'registro' if apagados == 1 else 'registros'} de mais de {DIAS_REGISTROS} dias]")
+    return apagados
+
+
+def apagar_registros_antigos():
+    """Apaga as planilhas live_DATA_HORA.csv da pasta registros e os logs "DATA HORA.log" do tosu\\logs (o tosu
+    guarda um por vez que abre e nunca apaga; numa live chega a 7 MB) de mais de DIAS_REGISTROS dias."""
+    planilhas = apagar_antigos(PASTA_REGISTROS, r"live_(\d{4}-\d{2}-\d{2}_\d{2}-\d{2})\.csv", "%Y-%m-%d_%H-%M")
+    logs = apagar_antigos(os.path.join(PASTA, "tosu", "logs"), r"(\d{4}-\d{2}-\d{2} \d{2}-\d{2}-\d{2})\.log",
+                          "%Y-%m-%d %H-%M-%S")
+    partes = []
+    if planilhas:
+        partes.append(f"{planilhas} {'registro' if planilhas == 1 else 'registros'}")
+    if logs:
+        partes.append(f"{logs} {'log' if logs == 1 else 'logs'} do tosu")
+    if partes:
+        print(f"[apaguei {' e '.join(partes)} de mais de {DIAS_REGISTROS} dias]")
 
 
 def salvar(arquivo):

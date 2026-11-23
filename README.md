@@ -594,6 +594,7 @@ Todos ficam na mesma pasta do programa.
 | Arquivo | O que tem |
 |---|---|
 | `registros\live_DATA_HORA.csv` | Planilha (abre no Excel) com quem entrou na live, horário e quantas mensagens mandou. Salva sozinha a cada 5 segundos. As de mais de 7 dias são apagadas sozinhas quando o programa abre (copie para outra pasta a que quiser guardar). |
+| `tosu\logs\` | Logs do tosu, um por vez que ele abre (numa live chega a 7 MB). Os de mais de 7 dias também são apagados sozinhos quando o programa abre. |
 | `apelidos.txt` | Apelidos usados pela voz. Pode editar à vontade. |
 | `pedidos.txt` | Fila de pedidos de mapas, atualizada na hora. |
 | `pedidos_por_presente.json` | Com o pedido por presente ligado: quantos pedidos cada pessoa ainda pode fazer. Apagar um nome dali (com o programa fechado) tira os pedidos dela. |
