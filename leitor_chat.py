@@ -24,7 +24,8 @@ Pedidos de mapas do osu! (a fila fica salva em pedidos.txt):
                          !abrirpedidos  !zerarpedidos  !limitepedidos <número>  !porpessoa <número>
                          !filapedidos (liga/desliga a fila: desligada, cada pedido vai direto para o osu!)
                          !pedidopresente (liga/desliga: cada presente vale um !pedir)
-    Atalho de teclado (ATALHO_PROXIMO, vem no Ctrl+Alt+N): faz o mesmo que o !proximo sem sair do jogo.
+    Atalhos de teclado (ATALHOS): cada tecla faz o mesmo que um comando no chat, sem sair do jogo.
+    Vem com o Ctrl+Alt+N para o !proximo.
 
 osu! (o tosu abre sozinho, se estiver na pasta tosu):  !np (mapa atual)  !pp  !rank  !recorde
     e avisos automáticos de mapa novo (AVISAR_MAPA) e de recorde de PP da live (AVISAR_RECORDE)
@@ -138,9 +139,11 @@ PEDIDOS_POR_PESSOA = 1  # quantos pedidos cada pessoa pode ter na fila ao mesmo 
 FILA_PEDIDOS = True     # False: cada !pedir vai direto para o seu chat do osu!, sem fila e sem a voz anunciar
 PEDIR_COM_PRESENTE = False  # True: cada presente que a pessoa manda vale um !pedir (você e os mods não precisam)
 COMANDOS_DESATIVADOS = []  # comandos desligados, sem o "!". ex.: ["copiar", "top"]
-# tecla que faz o mesmo que o !proximo, mesmo com o jogo na frente (só no Windows). Vem ligado no Ctrl+Alt+N; "" desliga.
-# ex.: "ctrl+alt+n", "ctrl+shift+p", "pause", "ctrl+num5". O jogo não recebe essa tecla: use uma que você não usa nele.
-ATALHO_PROXIMO = "ctrl+alt+n"
+# atalhos de teclado: "tecla": "comando". Cada tecla faz o mesmo que você mandar o comando no chat, mesmo com o
+# jogo na frente (só no Windows). O comando pode ter o que vem depois dele ("volume 50") e pode ser um som ("ai").
+# Teclas: "ctrl+alt+n", "ctrl+shift+p", "pause", "ctrl+num5", "f13"... O jogo não recebe essas teclas: use as que
+# você não usa nele. ex.: {"ctrl+alt+n": "proximo", "ctrl+alt+m": "mudo", "ctrl+alt+v": "voltar"}
+ATALHOS = {"ctrl+alt+n": "proximo"}
 
 # osu! (precisa do tosu aberto junto com o jogo)
 TOSU_URL = "http://127.0.0.1:24050/json/v2"
@@ -174,9 +177,10 @@ PASTA_SONS = os.path.join(PASTA, "sons")  # onde ficam os arquivos dos SONS (a p
 OPCOES = {nome.lower(): nome for nome in (
     "TIKTOK_USUARIO", "VOZ", "SERVIDOR_VOZ", "CHAVE_AZURE", "REGIAO_AZURE", "CHAVE_GOOGLE", "VOZ_GOOGLE",
     "CHAVE_ELEVENLABS", "VOZ_ELEVENLABS", "CHAVE_OPENAI", "VOZ_OPENAI", "VOZ_PIPER", "VOZ_KOKORO", "VELOCIDADE", "VOLUME", "LER_NOME", "TAMANHO_MAXIMO", "FILA_MAXIMA", "PALAVRAS_BLOQUEADAS",
-    "USUARIOS_SILENCIADOS", "PREFIXO", "MODERADORES", "ESPERA_COMANDO", "ESPERA_SOM", "SONS", "PRESENTES", "PEDIDOS_MAXIMOS", "PEDIDOS_POR_PESSOA", "FILA_PEDIDOS", "PEDIR_COM_PRESENTE", "COMANDOS_DESATIVADOS", "ATALHO_PROXIMO",
+    "USUARIOS_SILENCIADOS", "PREFIXO", "MODERADORES", "ESPERA_COMANDO", "ESPERA_SOM", "SONS", "PRESENTES", "PEDIDOS_MAXIMOS", "PEDIDOS_POR_PESSOA", "FILA_PEDIDOS", "PEDIR_COM_PRESENTE", "COMANDOS_DESATIVADOS", "ATALHOS",
     "TOSU_URL", "AVISAR_MAPA", "AVISAR_RECORDE", "OSU_USUARIO", "OSU_IRC_SENHA", "WEB_PORTA", "WEB_REDE_LOCAL", "ABRIR_PAGINA")}
-OPCOES_ANTIGAS = ("janela_pedidos",)  # opções de versões anteriores: ignoradas sem aviso
+OPCOES_ANTIGAS = ("janela_pedidos", "atalho_proximo")  # opções de versões anteriores: ignoradas sem aviso
+# (o atalho_proximo virou um dos ATALHOS: carregar_config passa ele para lá)
 SECRETAS = ("osu_irc_senha", "chave_azure", "chave_google", "chave_elevenlabs", "chave_openai")  # a página nunca
 # mostra: só diz se tem uma salva e deixa trocar
 SERVIDORES_VOZ = {"gratis": "Microsoft grátis", "azure": "Azure", "google": "Google", "elevenlabs": "ElevenLabs",
@@ -262,12 +266,9 @@ def aplicar_config(config: dict) -> list:
                 avisos.append(f"\"{chave}\" vai de: {', '.join(opcoes)}. "
                               f"Mantive: {json.dumps(atual, ensure_ascii=False)}")
                 continue
-        if nome == "ATALHO_PROXIMO":
-            valor = valor.replace(" ", "").lower()
-            if ler_atalho(valor) is None:
-                avisos.append(f"\"{chave}\": não entendi \"{valor}\": use teclas como ctrl+alt+n, ctrl+shift+p ou pause. "
-                              f"Mantive: {json.dumps(atual, ensure_ascii=False)}")
-                continue
+        if nome == "ATALHOS":
+            valor, avisos_atalhos = conferir_atalhos(valor)
+            avisos += avisos_atalhos
         if nome == "PREFIXO" and not valor.strip():
             avisos.append(f"\"{chave}\" não pode ficar vazio. Mantive: {json.dumps(atual, ensure_ascii=False)}")
             continue
@@ -279,6 +280,8 @@ def aplicar_config(config: dict) -> list:
                               f"Usei {ajustado}.")
                 valor = ajustado
         globals()[nome] = valor
+    if any(c.lower() == "atalhos" for c in config):  # depois do resto: os sons podem ter vindo junto
+        avisos += atalhos_sem_comando()
     return avisos
 
 
@@ -302,6 +305,12 @@ def carregar_config():
             print(f"*** ERRO no config.json: {e}")
         print("*** Usando as configurações padrão. Corrija o arquivo e abra o programa de novo.\n")
         return
+    # versões antigas tinham só o "atalho_proximo": ele vira um dos "atalhos" ("" = desligado = nenhum atalho)
+    antigo = next((c for c in config if c.lower() == "atalho_proximo"), None)
+    migrou = antigo is not None and not any(c.lower() == "atalhos" for c in config)
+    if migrou:
+        tecla = config[antigo]
+        config["atalhos"] = {tecla: "proximo"} if isinstance(tecla, str) and tecla.strip() else {}
     avisos = aplicar_config(config)
     sons_movidos = mover_sons_desligados()
     for aviso in avisos:
@@ -318,9 +327,12 @@ def carregar_config():
     sons_antigos = any(not isinstance(v, dict) or "volume" not in v or "ligado" not in v
                        for c, sons in config.items() if c.lower() == "sons" and isinstance(sons, dict)
                        for v in sons.values())
-    if (novas or sons_antigos or sons_movidos) and not avisos:
+    if (novas or sons_antigos or sons_movidos or migrou) and not avisos:
         try:
             salvar_config()
+            if migrou:
+                print("O atalho do próximo pedido agora fica em \"atalhos\" no config.json, junto com os outros "
+                      "atalhos de teclado que você quiser criar.\n")
             if novas:
                 print(f"Opções novas no config.json (com o valor padrão): {', '.join(novas)}\n")
             if sons_antigos:
@@ -1636,7 +1648,7 @@ trava_proximo = threading.Lock()  # o !proximo do chat e o atalho de teclado ao 
 
 
 def proximo_pedido():
-    """Manda o próximo pedido da fila (o !proximo e o ATALHO_PROXIMO)."""
+    """Manda o próximo pedido da fila (o !proximo, também pelos ATALHOS)."""
     with trava_proximo:
         if not pedidos:
             falar("Não tem nenhum pedido na fila.")
@@ -1648,40 +1660,105 @@ def proximo_pedido():
     falar(f"Próximo pedido, de {p['nome']}. Faltam {len(pedidos)}.")
 
 
-# ---------------- Atalho de teclado (Windows) ----------------
-# Tecla registrada no Windows (RegisterHotKey): funciona com o osu! ou qualquer outra janela na frente.
-# O Windows entrega a tecla só para o programa, então o jogo não a recebe: escolha uma que você não usa nele.
+# ---------------- Atalhos de teclado (Windows) ----------------
+# Cada tecla dos ATALHOS faz o mesmo que você mandar um comando no chat. Ela é registrada no Windows
+# (RegisterHotKey): funciona com o osu! ou qualquer outra janela na frente. O Windows entrega a tecla só para
+# o programa, então o jogo não a recebe: escolha as que você não usa nele.
 MODIFICADORES = {"ctrl": 0x2, "alt": 0x1, "shift": 0x4, "win": 0x8}
-TECLAS_ESPECIAIS = {"espaco": 0x20, "space": 0x20, "enter": 0x0D, "tab": 0x09, "esc": 0x1B, "insert": 0x2D,
+TECLAS_ESPECIAIS = {"espaco": 0x20, "enter": 0x0D, "tab": 0x09, "esc": 0x1B, "insert": 0x2D,
                     "delete": 0x2E, "home": 0x24, "end": 0x23, "pageup": 0x21, "pagedown": 0x22,
-                    "cima": 0x26, "baixo": 0x28, "esquerda": 0x25, "direita": 0x27,
-                    "up": 0x26, "down": 0x28, "left": 0x25, "right": 0x27, "pause": 0x13,
+                    "cima": 0x26, "baixo": 0x28, "esquerda": 0x25, "direita": 0x27, "pause": 0x13,
                     "scrolllock": 0x91, "printscreen": 0x2C,
                     **{f"f{n}": 0x6F + n for n in range(1, 25)},
                     **{f"num{n}": 0x60 + n for n in range(10)}}
-WM_HOTKEY, WM_TROCAR_ATALHO = 0x0312, 0x8001  # 0x8001 = WM_APP + 1: aviso nosso para trocar a tecla
+OUTROS_NOMES_TECLA = {"space": "espaco", "espaço": "espaco", "up": "cima", "down": "baixo", "left": "esquerda",
+                      "right": "direita"}
+WM_HOTKEY, WM_TROCAR_ATALHO = 0x0312, 0x8001  # 0x8001 = WM_APP + 1: aviso nosso para trocar as teclas
 id_thread_atalho = None
+DONO = ""  # o seu usuário do TikTok: os atalhos mandam os comandos como se fosse você no chat
 
 
-def ler_atalho(texto: str):
-    """"ctrl+alt+n" -> (modificadores, tecla), ou None se não der para entender. "" -> (0, 0) (desligado)."""
-    partes = [p.strip().lower() for p in texto.replace(" ", "").split("+")]
-    if partes == [""]:
-        return 0, 0
-    *mods, tecla = partes
+def nome_do_atalho(texto: str):
+    """ "Alt + Ctrl + N" -> "ctrl+alt+n" (sempre do mesmo jeito, para achar teclas repetidas).
+    None se não der para entender."""
+    *mods, tecla = [p.strip().lower() for p in texto.replace(" ", "").split("+")]
+    tecla = OUTROS_NOMES_TECLA.get(tecla, tecla)
     if not tecla or any(m not in MODIFICADORES for m in mods) or len(set(mods)) != len(mods):
         return None
-    if len(tecla) == 1 and tecla.isascii() and tecla.isalnum():
-        codigo = ord(tecla.upper())
-    elif tecla in TECLAS_ESPECIAIS:
-        codigo = TECLAS_ESPECIAIS[tecla]
-    else:
+    if not (len(tecla) == 1 and tecla.isascii() and tecla.isalnum()) and tecla not in TECLAS_ESPECIAIS:
         return None
+    return "+".join([m for m in MODIFICADORES if m in mods] + [tecla])
+
+
+def ler_atalho(texto: str) -> tuple:
+    """ "ctrl+alt+n" (já passado por nome_do_atalho) -> (modificadores, código da tecla) para o Windows."""
+    *mods, tecla = texto.split("+")
+    codigo = ord(tecla.upper()) if len(tecla) == 1 else TECLAS_ESPECIAIS[tecla]
     return sum(MODIFICADORES[m] for m in mods), codigo
 
 
+def comando_do_atalho(texto: str) -> str:
+    """ "!vol 50" -> "vol 50": guardado sem o prefixo, para continuar valendo se o PREFIXO mudar."""
+    texto = texto.strip()
+    if texto.startswith(PREFIXO):
+        texto = texto[len(PREFIXO):]
+    return texto.lstrip("!").strip()
+
+
+def conferir_atalhos(atalhos: dict) -> tuple:
+    """Confere os ATALHOS do config.json ou da página. Devolve (atalhos, avisos)."""
+    certos, avisos = {}, []
+    for tecla, comando in atalhos.items():
+        nome = nome_do_atalho(tecla)
+        if not nome:
+            avisos.append(f"atalho \"{tecla}\": não entendi a tecla. Use teclas como ctrl+alt+n, ctrl+shift+p, "
+                          "pause ou f13. Ignorei esse atalho.")
+            continue
+        comando = comando_do_atalho(comando)
+        if not comando:
+            avisos.append(f"atalho \"{tecla}\": falta o comando, como \"proximo\" ou \"volume 50\". "
+                          "Ignorei esse atalho.")
+            continue
+        if nome in certos:
+            avisos.append(f"a tecla {nome} aparece em mais de um atalho. Ficou o último: {PREFIXO}{comando}.")
+        certos[nome] = comando
+    return certos, avisos
+
+
+def comando_base(comando: str) -> str:
+    """ "vol 50" -> "volume" (o comando de verdade, sem o que vem depois e sem o nome curto)."""
+    partes = comando.split(maxsplit=1)
+    primeiro = partes[0].lower() if partes else ""
+    return APELIDOS_COMANDO.get(primeiro, primeiro)
+
+
+def atalhos_sem_comando() -> list:
+    """Avisos dos ATALHOS que mandam um comando que não existe (escrita errada, ou som que foi apagado)."""
+    return [f"o atalho {tecla} manda {PREFIXO}{comando}, mas não existe esse comando nem esse som."
+            for tecla, comando in ATALHOS.items()
+            if comando_base(comando) not in TODOS_COMANDOS and comando_base(comando) not in SONS]
+
+
+def usar_atalho(tecla: str, comando: str):
+    """Apertaram a tecla: faz o mesmo que você mandar o comando no chat."""
+    from types import SimpleNamespace
+    print(f"[atalho {tecla}: {PREFIXO}{comando}]")
+    cmd = comando_base(comando)
+    if desativado(cmd):
+        print(f"  ({PREFIXO}{cmd} está desligado: ligue de novo para o atalho funcionar)")
+        return
+    apelido = carregar_apelidos().get(DONO.lower(), DONO)
+    if not tratar_comando(SimpleNamespace(unique_id=DONO, nick_name=DONO), nome_para_falar(apelido),
+                          PREFIXO + comando, DONO):
+        if cmd in SONS:
+            print(f"*** O atalho {tecla} toca o som {PREFIXO}{cmd}, mas o arquivo dele não está na pasta sons.")
+        else:
+            print(f"*** O atalho {tecla} manda {PREFIXO}{comando}, mas não existe esse comando nem esse som. "
+                  "Troque na página ou no config.json (atalhos).")
+
+
 def vigia_atalho():
-    """Espera o ATALHO_PROXIMO. Quando o atalho muda (página ou config), mudar_config avisa e ele troca a tecla."""
+    """Espera os ATALHOS. Quando eles mudam (página ou config), mudar_config avisa e ele troca as teclas."""
     global id_thread_atalho
     import ctypes
     from ctypes import wintypes
@@ -1689,32 +1766,38 @@ def vigia_atalho():
     id_thread_atalho = kernel32.GetCurrentThreadId()
     msg = wintypes.MSG()
     user32.PeekMessageW(ctypes.byref(msg), None, 0, 0, 0)  # cria a fila de mensagens desta thread
-    registrado = None  # o atalho que está valendo agora
+    registrados = {}  # id no Windows -> (tecla, comando), só os que o Windows aceitou
+    valendo = None    # os ATALHOS de quando as teclas foram registradas
 
-    def registrar_atalho():
-        nonlocal registrado
-        if registrado:
-            user32.UnregisterHotKey(None, 1)
-            registrado = None
-        lido = ler_atalho(ATALHO_PROXIMO)
-        if not lido or not lido[1]:
-            return
-        if user32.RegisterHotKey(None, 1, lido[0] | 0x4000, lido[1]):  # 0x4000: segurar não repete
-            registrado = ATALHO_PROXIMO
-            print(f"Atalho para o próximo pedido: {ATALHO_PROXIMO}")
-        else:
-            print(f"*** Não consegui usar o atalho {ATALHO_PROXIMO}: outro programa já usa essa tecla. "
-                  "Escolha outra na página ou no config.json (atalho_proximo).")
+    def registrar_atalhos():
+        nonlocal valendo
+        for i in registrados:
+            user32.UnregisterHotKey(None, i)
+        registrados.clear()
+        valendo = dict(ATALHOS)
+        ocupadas = []
+        for i, (tecla, comando) in enumerate(valendo.items(), 1):
+            mods, codigo = ler_atalho(tecla)
+            if user32.RegisterHotKey(None, i, mods | 0x4000, codigo):  # 0x4000: segurar não repete
+                registrados[i] = (tecla, comando)
+            else:
+                ocupadas.append(tecla)
+        if registrados:
+            print("Atalhos de teclado: " + ", ".join(f"{t} = {PREFIXO}{c}" for t, c in registrados.values()))
+        if ocupadas:
+            print(f"*** Não consegui usar {'a tecla' if len(ocupadas) == 1 else 'as teclas'} {', '.join(ocupadas)}: "
+                  "outro programa já usa. Escolha outra na página ou no config.json (atalhos).")
 
-    registrar_atalho()
+    registrar_atalhos()
     while user32.GetMessageW(ctypes.byref(msg), None, 0, 0) > 0:
-        if msg.message == WM_HOTKEY:
+        if msg.message == WM_HOTKEY and msg.wParam in registrados:
+            tecla, comando = registrados[msg.wParam]
             try:
-                proximo_pedido()
-            except Exception as e:  # um erro aqui não pode desligar o atalho
-                print(f"*** Erro no atalho do próximo pedido: {e}")
-        elif msg.message == WM_TROCAR_ATALHO and registrado != ATALHO_PROXIMO:
-            registrar_atalho()
+                usar_atalho(tecla, comando)
+            except Exception as e:  # um erro aqui não pode desligar os atalhos
+                print(f"*** Erro no atalho {tecla}: {e}")
+        elif msg.message == WM_TROCAR_ATALHO and valendo != ATALHOS:
+            registrar_atalhos()
 
 
 def trocar_atalho():
@@ -1723,7 +1806,9 @@ def trocar_atalho():
         ctypes.windll.user32.PostThreadMessageW(id_thread_atalho, WM_TROCAR_ATALHO, 0, 0)
 
 
-def iniciar_atalho():
+def iniciar_atalho(dono: str):
+    global DONO
+    DONO = dono
     if sys.platform == "win32":
         threading.Thread(target=vigia_atalho, daemon=True).start()
 
@@ -2484,6 +2569,9 @@ label.check input { margin-top: 4px; }
 .som .vol input { flex: 1; min-width: 0; }
 .som .vol output { min-width: 3ch; text-align: right; font-variant-numeric: tabular-nums; font-size: 13px; }
 @media (max-width: 520px) { .som { flex-wrap: wrap; } .som span { flex-basis: 100%; } .som .vol { flex: 1 1 auto; } }
+.atalho { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; padding: 6px 0; border-top: 1px solid var(--borda); }
+.atalho input { flex: 1 1 150px; width: auto; min-width: 0; }
+.atalho button { padding: 5px 12px; }
 .novo { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
 .novo input[type=text] { flex: 1 1 140px; width: auto; }
 .novo input[type=file] { flex: 1 1 200px; min-width: 0; }
@@ -2716,10 +2804,18 @@ button.principal { background: var(--destaque); border-color: var(--destaque); c
       como fazer. Se o pedido sair da fila sem ser atendido (!cancelar, !remover, !zerarpedidos), a pessoa pode pedir de
       novo. Os pedidos que cada um ainda pode fazer ficam guardados em pedidos_por_presente.json, mesmo fechando o
       programa. Não vale para você e os mods. No chat: !pedidopresente.</small></span></label>
-    <label for="atalho_proximo">Atalho do próximo pedido<small>Uma tecla que faz o mesmo que o !proximo, mesmo com o
-      jogo na frente. Vem no Ctrl+Alt+N. Para trocar, clique na caixa e aperte a tecla; Backspace apaga e desliga. O jogo não
-      recebe essa tecla, então escolha uma que você não usa nele. Só no Windows.</small></label>
-    <input type="text" id="atalho_proximo" placeholder="desligado" autocomplete="off" spellcheck="false" readonly>
+  </section>
+
+  <section>
+    <h2>Atalhos de teclado</h2>
+    <p class="sub" style="margin:4px 0 0">Cada tecla faz o mesmo que você mandar um comando no chat, mesmo com o jogo na
+      frente: Ctrl+Alt+N para o <code>!proximo</code>, Ctrl+Alt+M para o <code>!mudo</code>, F13 para o
+      <code>!volume 50</code>... Vale qualquer comando, com o que vem depois dele, e também os sons (<code>!ai</code>).
+      Para escolher a tecla, clique na caixa da esquerda e aperte; Backspace apaga. O jogo não recebe essas teclas, então
+      escolha as que você não usa nele. Só no Windows. Clique em <b>Salvar</b> para valer.</p>
+    <div id="lista_atalhos"></div>
+    <datalist id="comandos_atalho"></datalist>
+    <p style="margin:10px 0 0"><button type="button" id="atalho_adicionar">Novo atalho</button></p>
   </section>
 
   <section>
@@ -2810,6 +2906,52 @@ function mostrarSons(d) {
   $("sons_faltando").textContent = d.sons_faltando.length ? "Estes não tocam, porque o arquivo não está na pasta sons: " +
     d.sons_faltando.join("; ") + "." : "";
   mostrarPresentes(d);
+  // sugestões da caixa do comando dos atalhos: os comandos e os sons
+  $("comandos_atalho").replaceChildren(...d.comandos.concat(d.sons.map(s => s.nome)).map(x => new Option(p + x)));
+}
+
+// uma linha dos atalhos de teclado: a tecla, o comando e o botão de tirar
+function linhaAtalho(tecla, comando) {
+  const linha = el("div", "atalho"), t = el("input"), c = el("input"), tirar = el("button", "", "Tirar");
+  t.type = c.type = "text";
+  t.className = "tecla"; t.readOnly = true; t.value = tecla; t.placeholder = "clique e aperte a tecla";
+  t.setAttribute("aria-label", "Tecla do atalho");
+  c.className = "comando"; c.value = comando; c.placeholder = "ex.: " + prefixo() + "mudo";
+  c.setAttribute("list", "comandos_atalho"); c.autocomplete = "off"; c.spellcheck = false;
+  c.setAttribute("aria-label", "Comando do atalho");
+  tirar.type = "button";
+  tirar.onclick = () => linha.remove();
+  linha.append(t, c, tirar);
+  return linha;
+}
+
+function prefixo() { return base.prefixo || $("prefixo").value || "!"; }
+
+function mostrarAtalhos(d) {
+  $("lista_atalhos").replaceChildren(...Object.entries(d.config.atalhos).map(([t, c]) => linhaAtalho(t, d.config.prefixo + c)));
+}
+
+// os atalhos como vão para o config.json; as linhas sem tecla ou sem comando ficam de fora
+function lerAtalhos() {
+  const a = {};
+  for (const l of $("lista_atalhos").children) {
+    const t = l.querySelector(".tecla").value, c = l.querySelector(".comando").value.trim();
+    if (t && c) a[t] = c;
+  }
+  return a;
+}
+
+// o que impede de salvar os atalhos, ou "" se estiver tudo certo
+function problemaNosAtalhos() {
+  const vistas = new Set();
+  for (const l of $("lista_atalhos").children) {
+    const t = l.querySelector(".tecla").value, c = l.querySelector(".comando").value.trim();
+    if (!t && c) return "Falta a tecla do atalho " + c + ": clique na caixa da esquerda e aperte a tecla.";
+    if (t && !c) return "Falta o comando do atalho " + t + " (ex.: " + prefixo() + "mudo).";
+    if (vistas.has(t)) return "A tecla " + t + " está em mais de um atalho. Escolha outra ou tire um deles.";
+    if (t) vistas.add(t);
+  }
+  return "";
 }
 
 // caixa de escolher o som de um presente
@@ -2919,6 +3061,7 @@ function preencher(d) {
     return l;
   })]));
   mostrarSons(d);
+  mostrarAtalhos(d);
   for (const [k, salva] of Object.entries(d.salvas)) {
     $(k).value = "";
     $(k).placeholder = salva ? "•••••••• (salva)" : "";
@@ -2945,6 +3088,7 @@ function coletar() {
     if (valor) c[k] = valor;
   }
   c.comandos_desativados = [...document.querySelectorAll("#cmds input")].filter(i => !i.checked).map(i => i.value);
+  c.atalhos = lerAtalhos();
   return c;
 }
 
@@ -2976,6 +3120,8 @@ function mudancas(atual) {
 }
 
 async function salvar() {
+  const problema = problemaNosAtalhos();
+  if (problema) return status(problema, true);
   status("Salvando...");
   try {
     const m = mudancas((await (await fetch("/api/config")).json()).config);
@@ -3004,12 +3150,12 @@ addEventListener("focus", async () => {
 });
 
 document.addEventListener("input", e => { if (e.target.type === "range") atualizarFaixas(); });
-// atalho do próximo pedido: a caixa grava a tecla apertada ("ctrl+alt+n"), no mesmo jeito do config.json
+// atalhos de teclado: a caixa da tecla grava a tecla apertada ("ctrl+alt+n"), no mesmo jeito do config.json
 const TECLAS_ATALHO = {" ": "espaco", "Enter": "enter", "Insert": "insert", "Delete": "delete", "Home": "home",
   "End": "end", "PageUp": "pageup", "PageDown": "pagedown", "ArrowUp": "cima", "ArrowDown": "baixo",
   "ArrowLeft": "esquerda", "ArrowRight": "direita", "Pause": "pause", "ScrollLock": "scrolllock"};
-$("atalho_proximo").addEventListener("keydown", e => {
-  if (e.key === "Tab") return;  // deixa sair da caixa pelo teclado
+$("lista_atalhos").addEventListener("keydown", e => {
+  if (!e.target.classList.contains("tecla") || e.key === "Tab") return;  // Tab: deixa sair da caixa pelo teclado
   e.preventDefault();
   if (["Backspace", "Escape"].includes(e.key)) { e.target.value = ""; return; }
   if (["Control", "Alt", "Shift", "Meta", "AltGraph"].includes(e.key)) return;  // espera a tecla de verdade
@@ -3034,6 +3180,10 @@ $("copiar_link").onclick = async () => {
     getSelection().selectAllChildren($("link_studio"));
     status("Não consegui copiar sozinho: o link ficou selecionado, aperte Ctrl+C.", true);
   }
+};
+$("atalho_adicionar").onclick = () => {
+  $("lista_atalhos").append(linhaAtalho("", ""));
+  $("lista_atalhos").lastChild.querySelector(".tecla").focus();
 };
 $("salvar").onclick = salvar;
 $("servidor_voz").onchange = mostrarServidor;
@@ -3086,10 +3236,13 @@ def comentario_repetido_ou_antigo(event) -> bool:
     return 0 < criada < INICIO.timestamp() - 60
 
 
+DONO_TESTE = "voce"  # no modo de teste, quem digita é o dono da live
+
+
 def modo_teste():
     """Simula o chat sem live: cada linha digitada vira um comentário."""
     from types import SimpleNamespace
-    dono = "voce"
+    dono = DONO_TESTE
     print("MODO DE TESTE: sem live, o que você digitar aqui entra como mensagem do chat.\n"
           "  oi                -> mensagem sua (você é o dono: pode usar os comandos de moderação)\n"
           "  Fulano: oi        -> mensagem de outra pessoa, chamada Fulano\n"
@@ -3263,8 +3416,9 @@ def main():
     carregar_creditos()
     salvar_pedidos()  # a fila começa vazia: o pedidos.txt não pode continuar mostrando a da live anterior
     adiantar_voz_local()
-    iniciar_atalho()
-    if usuario.lower() in ("teste", "--teste"):
+    teste = usuario.lower() in ("teste", "--teste")
+    iniciar_atalho(DONO_TESTE if teste else usuario)
+    if teste:
         threading.Thread(target=narrador, daemon=True).start()
         threading.Thread(target=vigia_osu, daemon=True).start()
         return modo_teste()

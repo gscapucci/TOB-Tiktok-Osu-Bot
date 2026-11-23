@@ -407,6 +407,22 @@ s.append(tabela(["Atalho", "É o mesmo que", "Quem pode"], [
     [cmd("!zerar"), cmd("!zerarpedidos"), "Você e mods"],
     [cmd("!limite 20"), cmd("!limitepedidos 20"), "Você e mods"],
 ], [50, 80, 40]))
+s.append(p("Atalhos de teclado", h2))
+s.append(p("Você pode pôr qualquer comando numa tecla. Apertar a tecla faz o mesmo que você mandar o comando "
+           "no chat, mesmo com o osu! na frente, sem sair do jogo. Já vem um: <b>Ctrl+Alt+N</b> faz o "
+           f"{cmd('!proximo')}."))
+s.append(passos([
+    ("Na página, clique em Novo atalho", "Fica na parte <b>Atalhos de teclado</b>."),
+    ("Escolha a tecla", "Clique na caixa da esquerda e aperte a tecla, sozinha (Pause, F13) ou com Ctrl, Alt, "
+                        "Shift e Win (Ctrl+Alt+M). Backspace apaga."),
+    ("Escreva o comando", f"Na caixa da direita, qualquer comando com o que vem depois dele "
+                          f"({cmd('!mudo')}, {cmd('!volume 50')}, {cmd('!fechar pedidos')}) ou um som "
+                          f"({cmd('!ai')})."),
+    ("Clique em Salvar", "Já vale na hora. <b>Tirar</b> apaga o atalho."),
+]))
+s.append(atencao("O jogo não recebe essas teclas: escolha as que você não usa nele. Se outro programa já usar "
+                 "a tecla, a janela do programa avisa. Um comando desligado também não funciona pelo atalho. "
+                 "Só no Windows."))
 s.append(Spacer(1, 4))
 s.append(p("Os moderadores não podem criar outros moderadores: assim, se um deles fizer besteira, não "
            "consegue dar acesso a mais ninguém. O prefixo, o endereço do tosu e as opções da página também "
@@ -441,9 +457,8 @@ s.append(passos([
                                            "(veja abaixo), o pedido chega numa mensagem sua para você mesmo, "
                                            "dentro do jogo. Se não, abre no navegador."),
     ("Ou aperte Ctrl+Alt+N", "Faz o mesmo que o !proximo, sem sair do jogo, e já vem ligado. Para trocar a "
-                              "tecla: na página, parte <b>Pedidos de mapas</b>, clique na caixa <b>Atalho do "
-                              "próximo pedido</b>, aperte a tecla e clique em <b>Salvar</b>. O jogo não recebe "
-                              "essa tecla: escolha uma que você não usa nele."),
+                              "tecla, ou pôr outros comandos em teclas, veja <b>Atalhos de teclado</b>, no fim "
+                              "da seção 5."),
     ("Abra o mapa", "No chat do osu!, clique no pedido: pedido com link abre o mapa <b>direto no jogo</b>. "
                     "Pedido com nome abre a busca do site do osu! no navegador."),
     ("Baixe, se precisar", "Pelo navegador, você precisa estar logado no site. No lazer, dê dois cliques no "
@@ -586,7 +601,7 @@ s.append(tabela(["Função", "Durante a live", "No config.json"], [
     ["Aceitar pedidos", f"{cmd('!fecharpedidos')} / {cmd('!abrirpedidos')}", "—"],
     ["Fila de pedidos", cmd("!filapedidos"), '"fila_pedidos": true / false'],
     ["Pedir só com presente", cmd("!pedidopresente"), '"pedir_com_presente": true / false'],
-    ["Atalho do próximo pedido", "—", '"atalho_proximo": "ctrl+alt+n"'],
+    ["Atalhos de teclado", "—", '"atalhos": {"ctrl+alt+n": "proximo"}'],
     ["Aviso de mapa novo", cmd("!avisos mapa"), '"avisar_mapa": true / false'],
     ["Aviso de recorde", cmd("!avisos recorde"), '"avisar_recorde": true / false'],
     ["Moderadores", f"{cmd('!mod')} / {cmd('!desmod')} (só você)", '"moderadores": ["usuario"]'],
@@ -744,9 +759,10 @@ s.append(opcoes([
                      "pedido vai direto para o seu chat do osu!, sem a voz anunciar."),
     ("pedir_com_presente", "<b>true</b>: cada presente que a pessoa manda vale um !pedir. Não vale para você "
                            "e os moderadores."),
-    ("atalho_proximo", "Tecla que faz o mesmo que o !proximo, mesmo com o jogo na frente. Vem <b>\"ctrl+alt+n\"</b>; "
-                       "ex.: <b>\"pause\"</b>; <b>\"\"</b> desliga. O jogo não recebe essa tecla: escolha uma "
-                       "que você não usa nele. Só no Windows."),
+    ("atalhos", "Teclas que fazem o mesmo que um comando no chat, mesmo com o jogo na frente: "
+                "<b>{\"tecla\": \"comando\"}</b>. Vem <b>{\"ctrl+alt+n\": \"proximo\"}</b>; ex.: "
+                "<b>\"ctrl+alt+m\": \"mudo\"</b>, <b>\"f13\": \"volume 50\"</b>, <b>\"ctrl+alt+a\": \"ai\"</b>. "
+                "O jogo não recebe essas teclas: escolha as que você não usa nele. Só no Windows."),
     ("avisar_mapa", "<b>true</b>: a voz anuncia quando você começa a jogar um mapa novo."),
     ("avisar_recorde", "<b>true</b>: a voz anuncia quando você bate o recorde de PP da live."),
     ("tosu_url", "Endereço onde o app busca os dados do tosu: <b>http://127.0.0.1:24050/json/v2</b>. "

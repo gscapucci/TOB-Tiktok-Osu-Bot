@@ -441,6 +441,37 @@ desliga os atalhos dele junto.
 | `!zerar` | `!zerarpedidos` | Você e mods |
 | `!limite 20` | `!limitepedidos 20` | Você e mods |
 
+### Atalhos de teclado
+
+Você pode pôr qualquer comando numa tecla. Apertar a tecla faz o mesmo que você mandar o comando no chat,
+e funciona mesmo com o osu! na frente, sem sair do jogo. Já vem um: **Ctrl+Alt+N** faz o `!proximo`.
+
+Para criar, na parte **Atalhos de teclado** da página, clique em **Novo atalho**. Clique na caixa da
+esquerda e aperte a tecla, escreva o comando na caixa da direita e clique em **Salvar**. **Tirar** apaga o
+atalho, e Backspace na caixa da tecla apaga a tecla. No config.json, os atalhos ficam em `"atalhos"`:
+
+```json
+"atalhos": {
+  "ctrl+alt+n": "proximo",
+  "ctrl+alt+m": "mudo",
+  "ctrl+alt+v": "voltar",
+  "ctrl+alt+l": "limpar",
+  "f13": "volume 50",
+  "ctrl+alt+a": "ai"
+}
+```
+
+- **O comando** pode ser qualquer um, com o que vem depois dele (`volume 50`, `fechar pedidos`), e também
+  um som (`ai`). Com ou sem o `!` na frente, tanto faz. O comando vale como se você tivesse mandado no
+  chat, e um comando desligado também não funciona pelo atalho.
+- **A tecla** pode ser sozinha (`pause`, `f13`) ou com `ctrl`, `alt`, `shift` e `win` (`ctrl+alt+n`,
+  `ctrl+shift+p`). Valem as letras, os números, `f1` a `f24`, o teclado numérico (`num0` a `num9`),
+  `espaco`, `enter`, `tab`, `esc`, `insert`, `delete`, `home`, `end`, `pageup`, `pagedown`, as setas
+  (`cima`, `baixo`, `esquerda`, `direita`), `pause`, `scrolllock` e `printscreen`.
+- O Windows entrega a tecla só para o programa, então **o jogo não a recebe**: escolha teclas que você não
+  usa nele. Se outro programa já usar a tecla, a janela avisa.
+- Só no Windows.
+
 ---
 
 ## 6. Pedidos de mapas do osu!
@@ -491,12 +522,9 @@ O chat pede mapas, eles entram numa fila e você abre um de cada vez.
   e a espera entre comandos continuam valendo. Precisa do chat do osu! configurado; se o envio falhar
   (ou o chat não estiver configurado), a voz avisa e o pedido fica guardado na fila, para sair com o
   `!proximo` (o navegador não abre sozinho no meio da partida).
-- **Atalho de teclado** (vem ligado no **Ctrl+Alt+N**; para trocar, na parte **Pedidos de mapas** da página,
-  clique na caixa **Atalho do próximo pedido** e aperte a tecla, ou mude `"atalho_proximo"` no config.json): a
-  tecla faz o mesmo que o `!proximo`, mesmo com o osu! na frente, sem sair do jogo. Vale tecla sozinha (`pause`) ou com
-  `ctrl`, `alt`, `shift` e `win` (`ctrl+alt+n`, `ctrl+shift+p`). O Windows entrega a tecla só para o
-  programa, então o jogo não a recebe: escolha uma que você não usa nele. Se outro programa já usar a
-  tecla, a janela avisa. Só no Windows.
+- **Atalho de teclado:** o **Ctrl+Alt+N** faz o mesmo que o `!proximo`, mesmo com o osu! na frente, sem
+  sair do jogo. Para trocar a tecla, ou pôr `!fecharpedidos` e outros comandos em teclas também, veja
+  [Atalhos de teclado](#atalhos-de-teclado).
 - **Pedir só com presente** (vem desligado; `!pedidopresente`, a caixinha na parte **Pedidos de mapas**
   da página, ou `"pedir_com_presente": true`): cada presente que a pessoa manda vale **um pedido**.
   Numa sequência, cada presente conta (5 rosas = 5 pedidos), mas o limite por pessoa continua valendo:
@@ -514,7 +542,6 @@ O chat pede mapas, eles entram numa fila e você abre um de cada vez.
 | `pedidos_por_pessoa` | Quantos pedidos cada pessoa pode ter na fila ao mesmo tempo (`0` = sem limite) | `1` |
 | `fila_pedidos` | `false`: pedidos vão direto para o chat do osu!, sem fila e sem a voz anunciar | `true` |
 | `pedir_com_presente` | `true`: cada presente que a pessoa manda vale um `!pedir` | `false` |
-| `atalho_proximo` | Tecla que faz o mesmo que o `!proximo` sem sair do jogo (ex.: `"ctrl+alt+n"`, `"pause"`; `""` desliga) | `"ctrl+alt+n"` |
 | Desligar tudo | `"comandos_desativados": ["pedir", "pedidos", "cancelar", "proximo", "remover", "fecharpedidos", "abrirpedidos", "zerarpedidos"]` | — |
 
 ---
@@ -604,7 +631,7 @@ configurações. Os comandos de chat que mudam uma configuração gravam no
 | Tamanho da fila de pedidos | `!limitepedidos N` | `"pedidos_maximos": N` |
 | Pedidos por pessoa | `!porpessoa N` | `"pedidos_por_pessoa": N` |
 | Pedir só com presente | `!pedidopresente` | `"pedir_com_presente": true/false` |
-| Atalho do próximo pedido | — | `"atalho_proximo": "ctrl+alt+n"` |
+| Atalhos de teclado | página, parte **Atalhos de teclado** | `"atalhos": {"ctrl+alt+n": "proximo"}` |
 | Prefixo, tosu, página | — | `"prefixo"`, `"tosu_url"`, `"web_porta"`, `"web_rede_local"`, `"abrir_pagina"` |
 
 ---
