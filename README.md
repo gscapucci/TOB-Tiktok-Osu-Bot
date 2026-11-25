@@ -517,7 +517,8 @@ O chat pede mapas, eles entram numa fila e você abre um de cada vez.
   aparece com o programa aberto. O LIVE Studio recusa `localhost`; `localtest.me` é um nome público
   que aponta para o seu próprio computador, e por ele só a fila abre (a página de configurações não).
   No OBS e parecidos: fonte de navegador com `http://localhost:8765/pedidos`.
-  `?max=3` no fim do endereço mostra só os 3 primeiros.
+  `?max=3` no fim do endereço mostra só os 3 primeiros. Com o pedido por presente ligado, ela mostra também
+  quantos pedidos o geral tem para todo mundo usar; `?so=geral` mostra só esse contador, sem a fila.
 - A fila **zera** quando o programa é fechado.
 - **Sem fila** (`!filapedidos` ou `"fila_pedidos": false`): cada `!pedir` vai na hora para o seu chat do
   osu! e a voz não anuncia. Sem limite por pessoa nem de tamanho; `!fecharpedidos`, palavras bloqueadas
@@ -536,7 +537,14 @@ O chat pede mapas, eles entram numa fila e você abre um de cada vez.
   Se o pedido sair da fila sem ser atendido (`!cancelar`, `!remover`, `!zerarpedidos`), a pessoa
   pode pedir de novo. Só presentes que chegam com a opção ligada contam. O que cada um ainda pode
   pedir fica no arquivo `pedidos_por_presente.json` e continua lá mesmo fechando o programa ou
-  numa outra live. Você e os mods pedem sem presente.
+  numa outra live. O pedido que ainda estava na fila quando o programa fechou também volta: a pessoa
+  pode pedir de novo. Você e os mods pedem sem presente.
+- **Pedidos para todo mundo** (vem desligado; `presente_geral_lives`, ou na página): quem passa esse número
+  de lives inteiras sem pedir tem os pedidos mandados para o **geral**, e qualquer um usa com o `!pedir`, mesmo
+  sem ter mandado presente. A live em que o presente chegou não conta: com `2`, o presente de hoje vai para o
+  geral no começo da terceira live depois desta. Fazer um pedido recomeça a contagem. Cada um gasta os seus
+  antes dos do geral, e o `!pedidos` fala quantos o geral tem. Só contam lives que começam com o pedido por
+  presente ligado; cair a conexão ou reabrir o programa não conta como outra live.
 
 | Configuração | O que faz | Padrão |
 |---|---|---|
@@ -544,6 +552,7 @@ O chat pede mapas, eles entram numa fila e você abre um de cada vez.
 | `pedidos_por_pessoa` | Quantos pedidos cada pessoa pode ter na fila ao mesmo tempo (`0` = sem limite) | `1` |
 | `fila_pedidos` | `false`: pedidos vão direto para o chat do osu!, sem fila e sem a voz anunciar | `true` |
 | `pedir_com_presente` | `true`: cada presente que a pessoa manda vale um `!pedir` | `false` |
+| `presente_geral_lives` | Depois de quantas lives sem a pessoa pedir os pedidos dela vão para o geral (`0` = nunca) | `0` |
 | Desligar tudo | `"comandos_desativados": ["pedir", "pedidos", "cancelar", "proximo", "remover", "fecharpedidos", "abrirpedidos", "zerarpedidos"]` | — |
 
 ---
@@ -597,7 +606,7 @@ Todos ficam na mesma pasta do programa.
 | `tosu\logs\` | Logs do tosu, um por vez que ele abre (numa live chega a 7 MB). Os de mais de 7 dias também são apagados sozinhos quando o programa abre. |
 | `apelidos.txt` | Apelidos usados pela voz. Pode editar à vontade. |
 | `pedidos.txt` | Fila de pedidos de mapas, atualizada na hora. |
-| `pedidos_por_presente.json` | Com o pedido por presente ligado: quantos pedidos cada pessoa ainda pode fazer. Apagar um nome dali (com o programa fechado) tira os pedidos dela. |
+| `pedidos_por_presente.json` | Com o pedido por presente ligado: quantos pedidos cada pessoa ainda pode fazer, contando os que estão na fila. Apagar um nome dali (com o programa fechado) tira os pedidos dela. |
 | `sons\` | Os arquivos dos sons. Qual comando toca cada um fica no `config.json`, em `sons`. |
 
 > Se a planilha estiver aberta no Excel, o programa não consegue salvar —

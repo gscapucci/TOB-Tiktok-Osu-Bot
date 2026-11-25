@@ -505,7 +505,13 @@ s += itens([
     f"Se o pedido sair da fila sem ser atendido ({cmd('!cancelar')}, {cmd('!remover')} ou {cmd('!zerarpedidos')}), "
     "a pessoa pode pedir de novo.",
     f"O {cmd('!pedidos')} fala quantos a pessoa ainda pode pedir. Isso fica guardado no arquivo "
-    "<b>pedidos_por_presente.json</b>, mesmo fechando o programa ou numa outra live.",
+    "<b>pedidos_por_presente.json</b>, mesmo fechando o programa ou numa outra live. O pedido que ainda estava na "
+    "fila quando o programa fechou também volta: a pessoa pode pedir de novo.",
+    "Com <b>Lives até ir para o geral</b> na página (<b>presente_geral_lives</b>), quem passa esse número de lives "
+    f"sem pedir tem os pedidos mandados para o <b>geral</b>: qualquer um usa com o {cmd('!pedir')}. A live em que o "
+    "presente chegou não conta, e fazer um pedido recomeça a contagem. Vem 0: nunca vão.",
+    "A fila na tela da live mostra quantos pedidos o geral tem. Com <b>?so=geral</b> no fim do link, mostra só esse "
+    "número, sem a fila.",
     "Só contam os presentes que chegam com a opção ligada. Você e os moderadores pedem sem presente.",
 ])
 s.append(p("Sem fila: pedidos direto no osu!", h2))
@@ -760,6 +766,8 @@ s.append(opcoes([
                      "pedido vai direto para o seu chat do osu!, sem a voz anunciar."),
     ("pedir_com_presente", "<b>true</b>: cada presente que a pessoa manda vale um !pedir. Não vale para você "
                            "e os moderadores."),
+    ("presente_geral_lives", "Depois de quantas lives sem a pessoa pedir os pedidos dela vão para o geral, e qualquer "
+                             "um usa com o !pedir. <b>0</b> = nunca."),
     ("atalhos", "Teclas que fazem o mesmo que um comando no chat, mesmo com o jogo na frente: "
                 "<b>{\"tecla\": \"comando\"}</b>. Vem <b>{\"ctrl+alt+n\": \"proximo\"}</b>; ex.: "
                 "<b>\"ctrl+alt+m\": \"mudo\"</b>, <b>\"ctrl+alt+cima\": \"volume +10\"</b>, <b>\"ctrl+alt+a\": \"ai\"</b>. "

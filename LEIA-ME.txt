@@ -165,6 +165,8 @@ CONFIGURAÇÕES
   pedir_com_presente     true: cada presente que a pessoa manda vale um !pedir (5 rosas
                          = 5 pedidos; vem false). Quanto cada um ainda pode pedir fica em
                          pedidos_por_presente.json. Não vale para você e os mods.
+  presente_geral_lives   depois de quantas lives sem a pessoa pedir os pedidos dela vão
+                         para o geral, e qualquer um usa com !pedir (0 = nunca; vem 0)
   atalhos                teclas que fazem o mesmo que um comando no chat, sem sair do jogo.
                          Vem {"ctrl+alt+n": "proximo"}; ex.: {"ctrl+alt+n": "proximo",
                          "ctrl+alt+m": "mudo", "ctrl+alt+cima": "volume +10",

@@ -138,6 +138,7 @@ PEDIDOS_MAXIMOS = 30    # tamanho máximo da fila de pedidos de mapas do osu!
 PEDIDOS_POR_PESSOA = 1  # quantos pedidos cada pessoa pode ter na fila ao mesmo tempo (0 = sem limite)
 FILA_PEDIDOS = True     # False: cada !pedir vai direto para o seu chat do osu!, sem fila e sem a voz anunciar
 PEDIR_COM_PRESENTE = False  # True: cada presente que a pessoa manda vale um !pedir (você e os mods não precisam)
+PRESENTE_GERAL_LIVES = 0  # lives sem a pessoa pedir até os pedidos dela irem para todo mundo usar (0 = nunca vão)
 COMANDOS_DESATIVADOS = []  # comandos desligados, sem o "!". ex.: ["copiar", "top"]
 # atalhos de teclado: "tecla": "comando". Cada tecla faz o mesmo que você mandar o comando no chat, mesmo com o
 # jogo na frente (só no Windows). O comando pode ter o que vem depois dele ("volume 50") e pode ser um som ("ai").
@@ -177,7 +178,7 @@ PASTA_SONS = os.path.join(PASTA, "sons")  # onde ficam os arquivos dos SONS (a p
 OPCOES = {nome.lower(): nome for nome in (
     "TIKTOK_USUARIO", "VOZ", "SERVIDOR_VOZ", "CHAVE_AZURE", "REGIAO_AZURE", "CHAVE_GOOGLE", "VOZ_GOOGLE",
     "CHAVE_ELEVENLABS", "VOZ_ELEVENLABS", "CHAVE_OPENAI", "VOZ_OPENAI", "VOZ_PIPER", "VOZ_KOKORO", "VELOCIDADE", "VOLUME", "LER_NOME", "TAMANHO_MAXIMO", "FILA_MAXIMA", "PALAVRAS_BLOQUEADAS",
-    "USUARIOS_SILENCIADOS", "PREFIXO", "MODERADORES", "ESPERA_COMANDO", "ESPERA_SOM", "SONS", "PRESENTES", "PEDIDOS_MAXIMOS", "PEDIDOS_POR_PESSOA", "FILA_PEDIDOS", "PEDIR_COM_PRESENTE", "COMANDOS_DESATIVADOS", "ATALHOS",
+    "USUARIOS_SILENCIADOS", "PREFIXO", "MODERADORES", "ESPERA_COMANDO", "ESPERA_SOM", "SONS", "PRESENTES", "PEDIDOS_MAXIMOS", "PEDIDOS_POR_PESSOA", "FILA_PEDIDOS", "PEDIR_COM_PRESENTE", "PRESENTE_GERAL_LIVES", "COMANDOS_DESATIVADOS", "ATALHOS",
     "TOSU_URL", "AVISAR_MAPA", "AVISAR_RECORDE", "OSU_USUARIO", "OSU_IRC_SENHA", "WEB_PORTA", "WEB_REDE_LOCAL", "ABRIR_PAGINA")}
 OPCOES_ANTIGAS = ("janela_pedidos", "atalho_proximo")  # opções de versões anteriores: ignoradas sem aviso
 # (o atalho_proximo virou um dos ATALHOS: carregar_config passa ele para lá)
@@ -189,7 +190,7 @@ DO_SERVIDOR = {"gratis": "da Microsoft", "azure": "da Azure", "google": "do Goog
                "openai": "da OpenAI", "piper": "do Piper", "kokoro": "do Kokoro"}  # "a chave da Azure", "a voz do Google"
 VOZES_LOCAIS = {"piper": ("faber", "cadu", "jeff"), "kokoro": ("pf_dora", "pm_alex", "pm_santa")}
 LIMITES = {"VELOCIDADE": (-10, 10), "VOLUME": (0, 100), "TAMANHO_MAXIMO": (1, None), "FILA_MAXIMA": (1, None),
-           "ESPERA_COMANDO": (0, None), "ESPERA_SOM": (0, None), "PEDIDOS_MAXIMOS": (1, None), "PEDIDOS_POR_PESSOA": (0, None), "WEB_PORTA": (0, 65535)}
+           "ESPERA_COMANDO": (0, None), "ESPERA_SOM": (0, None), "PEDIDOS_MAXIMOS": (1, None), "PEDIDOS_POR_PESSOA": (0, None), "PRESENTE_GERAL_LIVES": (0, None), "WEB_PORTA": (0, 65535)}
 
 
 def config_atual() -> dict:
@@ -1038,20 +1039,112 @@ pedidos_abertos = True  # !fecharpedidos / !abrirpedidos
 # se o programa fechar, ou a live acabar antes de ela pedir, o crédito continua lá na próxima.
 ARQUIVO_CREDITOS = os.path.join(PASTA, "pedidos_por_presente.json")
 creditos = {}           # usuário em minúsculo -> pedidos que a pessoa ainda pode fazer
-trava_creditos = threading.Lock()
+creditos_gravados = {}  # o que está no arquivo: creditos + os pedidos pagos que ainda estão na fila
+# PRESENTE_GERAL_LIVES: os pedidos que ninguém usou vão para o geral, que fica em creditos como se fosse uma
+# pessoa (o * não existe em nome de usuário do TikTok). "lotes" guarda em qual live cada um chegou.
+GERAL = "*geral*"
+CHAVE_LIVES = "*lives*"
+lives = {"numero": 0, "sala": "", "lotes": {}}  # lotes: usuário -> {número da live (texto): quantos pedidos}
+trava_creditos = threading.RLock()
 
 
 def carregar_creditos():
-    global creditos
+    global creditos, creditos_gravados, lives
     try:
         with open(ARQUIVO_CREDITOS, encoding="utf-8") as f:
             dados = json.load(f)
         creditos = {str(u).lower(): n for u, n in dados.items() if isinstance(n, int) and n > 0}
+        guardado = dados.get(CHAVE_LIVES)
+        if isinstance(guardado, dict):
+            lotes = guardado.get("lotes")
+            lives = {"numero": int(guardado.get("numero", 0)), "sala": str(guardado.get("sala", "")),
+                     "lotes": {u: {str(int(live)): int(n) for live, n in lote.items()}
+                               for u, lote in (lotes if isinstance(lotes, dict) else {}).items()}}
+        creditos_gravados = dados
+        acertar_lotes()
     except FileNotFoundError:
         pass
-    except (ValueError, OSError, AttributeError) as e:
+    except (ValueError, TypeError, OSError, AttributeError) as e:
         print(f"*** Não consegui ler {os.path.basename(ARQUIVO_CREDITOS)} ({e}). Os pedidos por presente "
               f"começam do zero; o arquivo só é regravado no próximo presente.")
+
+
+def acertar_lotes():
+    """Deixa os lotes com a mesma soma dos créditos. O que sobra sem lote (arquivo de uma versão antiga, mexido
+    à mão, ou pedido que voltou da fila) conta como desta live; gastou um, todos recomeçam desta."""
+    numero = str(lives["numero"])
+    for uid in [u for u in lives["lotes"] if u not in creditos]:
+        del lives["lotes"][uid]
+    for uid, n in creditos.items():
+        if uid == GERAL:
+            continue
+        lote = lives["lotes"].get(uid, {})
+        falta = n - sum(lote.values())
+        if falta > 0:
+            lote[numero] = lote.get(numero, 0) + falta
+        elif falta < 0:
+            lote = {numero: n}
+        lives["lotes"][uid] = lote
+
+
+def comecou_live(sala) -> int:
+    """Conectou numa live. Se for uma nova (cair e voltar, ou reabrir o programa, é a mesma sala), manda para o
+    geral os pedidos de quem passou PRESENTE_GERAL_LIVES lives inteiras sem pedir, sem contar a live em que o
+    presente chegou. Só contam as lives que começam com o pedido por presente ligado.
+    Devolve quantos foram."""
+    sala = str(sala or "")
+    if not sala or sala == lives["sala"]:
+        return 0
+    with trava_creditos:
+        acertar_lotes()
+        lives["sala"] = sala
+        total = 0
+        if PEDIR_COM_PRESENTE:
+            lives["numero"] += 1
+        if PEDIR_COM_PRESENTE and PRESENTE_GERAL_LIVES:
+            for uid, lote in list(lives["lotes"].items()):
+                velhos = [x for x in lote if lives["numero"] - 1 - int(x) >= PRESENTE_GERAL_LIVES]
+                n = sum(lote.pop(x) for x in velhos)
+                if not n:
+                    continue
+                total += n
+                creditos[uid] -= n
+                if not creditos[uid]:
+                    del creditos[uid], lives["lotes"][uid]
+                print(f"[{n} {'pedido' if n == 1 else 'pedidos'} de @{uid} {'foi' if n == 1 else 'foram'} para o geral]")
+            if total:
+                creditos[GERAL] = creditos.get(GERAL, 0) + total
+        gravar_creditos()
+        return total
+
+
+def renovar_creditos(uid: str):
+    """A pessoa fez um pedido: as lives dos que ela ainda tem voltam a contar desta."""
+    with trava_creditos:
+        if uid in creditos and uid != GERAL:
+            lives["lotes"][uid] = {str(lives["numero"]): creditos[uid]}
+            gravar_creditos()
+
+
+def gravar_creditos():
+    """Grava os créditos (com a trava_creditos na mão). Um pedido pago que ainda está na fila conta como
+    crédito no arquivo: a fila zera ao fechar o programa, e assim a pessoa pode pedir de novo na próxima live."""
+    global creditos_gravados
+    dados = dict(creditos)
+    for p in list(pedidos):
+        if p.get("pago"):
+            dados[p["pago"]] = dados.get(p["pago"], 0) + 1
+    if not dados and not creditos_gravados:
+        return
+    dados[CHAVE_LIVES] = json.loads(json.dumps(lives))  # uma cópia
+    if dados == creditos_gravados:
+        return
+    try:
+        with open(ARQUIVO_CREDITOS, "w", encoding="utf-8") as f:
+            json.dump(dados, f, ensure_ascii=False, indent=2)
+        creditos_gravados = dados
+    except OSError as e:
+        print(f"*** Não consegui gravar {os.path.basename(ARQUIVO_CREDITOS)} ({e}).")
 
 
 def mudar_creditos(uid: str, quanto: int) -> int:
@@ -1062,18 +1155,15 @@ def mudar_creditos(uid: str, quanto: int) -> int:
             creditos[uid] = n
         else:
             creditos.pop(uid, None)
-        try:
-            with open(ARQUIVO_CREDITOS, "w", encoding="utf-8") as f:
-                json.dump(creditos, f, ensure_ascii=False, indent=2)
-        except OSError as e:
-            print(f"*** Não consegui gravar {os.path.basename(ARQUIVO_CREDITOS)} ({e}).")
+        acertar_lotes()
+        gravar_creditos()
         return n
 
 
 def devolver_credito(p: dict):
     """Pedido pago com presente que saiu da fila sem ser atendido (!cancelar, !remover, !zerarpedidos)."""
     if p.get("pago"):
-        mudar_creditos(p["uid"], 1)
+        mudar_creditos(p["pago"], 1)  # para quem pagou: a pessoa ou o geral
 
 
 def link_do_pedido(texto: str) -> str:
@@ -1234,7 +1324,9 @@ def abrir_pedido(p: dict, navegador: bool = True):
 
 
 def salvar_pedidos():
-    """Mantém o pedidos.txt atualizado, para você ver a fila durante a live."""
+    """Mantém o pedidos.txt atualizado, para você ver a fila durante a live (e os créditos dos pedidos pagos)."""
+    with trava_creditos:
+        gravar_creditos()
     try:
         with open(ARQUIVO_PEDIDOS, "w", encoding="utf-8") as f:
             for i, p in enumerate(pedidos, 1):
@@ -2149,9 +2241,10 @@ def tratar_comando(user, nome: str, texto: str, dono: str) -> bool:
         meus = [i for i, p in enumerate(pedidos, 1) if p["uid"] == uid]  # posições dos pedidos da pessoa
         no_limite = PEDIDOS_POR_PESSOA and not eh_mod and len(meus) >= PEDIDOS_POR_PESSOA
         pagar = PEDIR_COM_PRESENTE and not eh_mod  # gasta um dos pedidos que a pessoa ganhou com presente
+        pagador = uid if creditos.get(uid) else GERAL  # sem nenhum dela: usa um do geral
         if not pedidos_abertos:
             dizer(f"{nome}, os pedidos estão fechados agora.")
-        elif pagar and not creditos.get(uid):
+        elif pagar and not creditos.get(pagador):
             dizer(f"{nome}, para pedir um mapa, mande um presente antes. Cada presente vale um pedido.")
         elif not arg:
             dizer(f"{nome}, manda o link, o nome ou o código do mapa depois do comando.")
@@ -2159,9 +2252,11 @@ def tratar_comando(user, nome: str, texto: str, dono: str) -> bool:
             if tem_palavra_bloqueada(arg):
                 dizer(f"{nome}, esse pedido não pode.")
                 return True
-            p = {"uid": uid, "nome": nome, "texto": arg, "url": link_do_pedido(arg)}
-            if pagar:  # já foi atendido (ou fica guardado na fila): não volta mais
-                mudar_creditos(uid, -1)
+            p = {"uid": uid, "nome": nome, "texto": arg, "url": link_do_pedido(arg),
+                 "pago": pagador if pagar else ""}  # de quem é o crédito gasto
+            if pagar:  # foi para o osu!: não volta mais. Se não conseguir ir, fica na fila e vale a regra dela
+                mudar_creditos(pagador, -1)
+            renovar_creditos(uid)
             print(f"[pedido de {nome}: {arg}]\n  {p['url']}")
             threading.Thread(target=abrir_pedido, args=(p, False), daemon=True).start()
         elif no_limite and len(meus) == 1:
@@ -2173,12 +2268,16 @@ def tratar_comando(user, nome: str, texto: str, dono: str) -> bool:
         elif tem_palavra_bloqueada(arg):
             dizer(f"{nome}, esse pedido não pode.")
         else:
-            pedidos.append({"uid": uid, "nome": nome, "texto": arg, "url": link_do_pedido(arg), "pago": pagar})
+            pedidos.append({"uid": uid, "nome": nome, "texto": arg, "url": link_do_pedido(arg),
+                            "pago": pagador if pagar else ""})
             salvar_pedidos()
-            sobra = mudar_creditos(uid, -1) if pagar else 0
-            print(f"[novo pedido de {nome}: {arg}]" + (f" (ainda pode pedir {sobra})" if pagar else ""))
+            sobra = mudar_creditos(pagador, -1) if pagar else 0
+            renovar_creditos(uid)
+            print(f"[novo pedido de {nome}: {arg}]" + ("" if not pagar else f" (do geral, que ainda tem {sobra})" if pagador == GERAL
+                                                          else f" (ainda pode pedir {sobra})"))
             dizer(f"Pedido de {nome} anotado, posição {len(pedidos)}." +
-                  (f" Você ainda pode pedir {sobra}." if sobra else ""))
+                  (f" Era do geral, que ainda tem {sobra}." if pagar and pagador == GERAL else
+                   f" Você ainda pode pedir {sobra}." if sobra else ""))
     elif cmd == "cancelar":
         if pedido_meu is None:
             dizer(f"{nome}, você não tem pedido na fila.")
@@ -2206,7 +2305,10 @@ def tratar_comando(user, nome: str, texto: str, dono: str) -> bool:
             texto += f" Os seus são os números {', '.join(meus[:-1])} e {meus[-1]}."
         if PEDIR_COM_PRESENTE and not eh_mod:
             n = creditos.get(uid, 0)
-            texto += f" Você pode pedir {n} {'mapa' if n == 1 else 'mapas'}." if n else \
+            geral = creditos.get(GERAL, 0)
+            if geral:
+                texto += f" No geral tem {geral} para qualquer um pedir."
+            texto += f" Você pode pedir {n} {'mapa' if n == 1 else 'mapas'}." if n else "" if geral else \
                 " Para pedir um mapa, mande um presente: cada presente vale um pedido."
         if not pedidos_abertos:
             texto += " Os pedidos estão fechados."
@@ -2392,7 +2494,8 @@ class PaginaConfig(http.server.BaseHTTPRequestHandler):
             # só o que aparece na tela: nome e pedido (o @ e o link ficam de fora)
             self.responder_json({"pedidos": [{"nome": x["nome"], "texto": x["texto"]} for x in list(pedidos)],
                                  "abertos": pedidos_abertos, "fila": FILA_PEDIDOS, "prefixo": PREFIXO,
-                                 "presente": PEDIR_COM_PRESENTE})
+                                 "presente": PEDIR_COM_PRESENTE,
+                                 "geral": creditos.get(GERAL, 0) if PEDIR_COM_PRESENTE else 0})
         else:
             self.responder(404, "text/plain; charset=utf-8", b"nada aqui")
 
@@ -2448,19 +2551,25 @@ li { display: flex; gap: .45em; align-items: baseline; padding: 3px 0; }
 .pos { color: #fff; min-width: 1.6em; font-variant-numeric: tabular-nums; }
 .mapa { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 22em; }
 .quem { font-size: .7em; color: #fff; font-weight: 600; white-space: nowrap; }
+.geral { font-size: .85em; color: #ffd76a; }
 .vazio, .mais { font-size: .75em; color: #fff; font-weight: 600; }
-ol:not(:empty) + #extra { margin-top: 6px; }  /* separa o "Peça com !pedir" da lista */
+.so-geral h1, .so-geral ol { display: none; }
+.so-geral #painel { min-width: 0; }
+#topo:not(:empty) + ol:not(:empty) { margin-top: 6px; }  /* separa o "Peça com !pedir" da lista */
 </style>
 </head>
 <body>
 <div id="painel">
 <h1>Pedidos <small id="estado"></small></h1>
+<div id="topo"></div>
 <ol id="lista"></ol>
 <div id="extra"></div>
 </div>
 <script>
 const params = new URLSearchParams(location.search);
 const MAX = Math.max(1, parseInt(params.get("max")) || 5);
+const SO_GERAL = params.get("so") === "geral";  // só o contador, sem a fila
+document.body.classList.toggle("so-geral", SO_GERAL);
 const $ = id => document.getElementById(id);
 
 function el(tag, classe, texto) {
@@ -2476,6 +2585,12 @@ async function atualizar() {
   } catch (e) {
     return;  // programa fechado: mantém o que estava na tela e tenta de novo
   }
+  const geral = el("div", "geral", `🎁 ${d.geral} ${d.geral === 1 ? "pedido" : "pedidos"} para todo mundo`);
+  if (SO_GERAL) {
+    $("painel").style.display = d.presente ? "" : "none";
+    $("topo").replaceChildren(geral);
+    return;
+  }
   const n = d.pedidos.length;
   $("estado").textContent = !d.fila ? (n ? `(${n} ${n === 1 ? "guardado" : "guardados"})` : "(direto no osu!)") :
     !d.abertos ? "(fechados)" : n ? `(${n})` : "";
@@ -2486,9 +2601,10 @@ async function atualizar() {
     return li;
   }));
   // como pedir fica sempre à vista enquanto os pedidos estão abertos, com ou sem gente na fila
-  $("extra").replaceChildren(...[
-    n > MAX ? el("div", "mais", `+ ${n - MAX} na fila`) : null,
-    d.abertos ? el("div", "vazio", (d.presente ? "Mande um presente e peça" : "Peça") +
+  $("extra").replaceChildren(...(n > MAX ? [el("div", "mais", `+ ${n - MAX} na fila`)] : []));
+  $("topo").replaceChildren(...[
+    d.geral ? geral : null,
+    d.abertos ? el("div", "vazio", (d.presente && !d.geral ? "Mande um presente e peça" : "Peça") +
                                    ` com ${d.prefixo}pedir <link, nome ou código>`) : null,
   ].filter(Boolean));
 }
@@ -2618,7 +2734,8 @@ button.principal { background: var(--destaque); border-color: var(--destaque); c
         <li>Arraste e ajuste o tamanho da fila na tela. Pronto: nas próximas lives ela aparece sozinha.</li>
       </ol>
       <small>Não precisa abrir nada: a fila aparece no LIVE Studio enquanto o programa estiver aberto.
-        No OBS: fonte de navegador com <code id="link_pedidos"></code>. <code>?max=3</code> no fim mostra só os 3 primeiros.</small>
+        No OBS: fonte de navegador com <code id="link_pedidos"></code>. <code>?max=3</code> no fim mostra só os 3 primeiros.
+        <code>?so=geral</code> mostra só quantos pedidos de presente o geral tem, sem a fila.</small>
     </div>
   </section>
 
@@ -2821,6 +2938,10 @@ button.principal { background: var(--destaque); border-color: var(--destaque); c
       como fazer. Se o pedido sair da fila sem ser atendido (!cancelar, !remover, !zerarpedidos), a pessoa pode pedir de
       novo. Os pedidos que cada um ainda pode fazer ficam guardados em pedidos_por_presente.json, mesmo fechando o
       programa. Não vale para você e os mods. No chat: !pedidopresente.</small></span></label>
+    <label for="presente_geral_lives">Lives até ir para o geral<small>Com o pedir só com presente ligado: quem passa esse
+      número de lives sem pedir tem os pedidos mandados para o geral, e qualquer um usa com o !pedir. A live em que o
+      presente chegou não conta. 0 = nunca vão.</small></label>
+    <input type="number" id="presente_geral_lives" min="0">
   </section>
 
   <section>
@@ -3464,6 +3585,10 @@ def main():
             print(f"Conectado à live de @{usuario}! Lendo o chat...\n")
             falar("Conectado ao chat da live.")
         ja_conectou = True
+        foram = comecou_live(event.room_id)
+        if foram:
+            falar(f"{foram} {'pedido' if foram == 1 else 'pedidos'} de presente que ninguém usou "
+                  f"{'foi' if foram == 1 else 'foram'} para o geral. Qualquer um pode usar com exclamação pedir.")
 
     @client.on(DisconnectEvent)
     async def ao_desconectar(event: DisconnectEvent):
